@@ -24,6 +24,7 @@ export const DEFAULT_CONTENT_TYPE = "application/octet-stream";
 
 export type SUPPORTED_SERVICES_TYPE =
   | "s3"
+  | "telegram"
   | "webdav"
   | "dropbox"
   | "onedrive"
@@ -61,6 +62,26 @@ export interface S3Config {
    * @deprecated
    */
   bypassCorsLocally?: boolean;
+}
+
+export interface TelegramIndexEntry {
+  key: string;
+  kind: "file" | "folder";
+  sizeRaw: number;
+  mtimeCli?: number;
+  ctimeCli?: number;
+  messageId?: number;
+  fileId?: string;
+}
+
+export interface TelegramConfig {
+  botToken: string;
+  chatId: string;
+  apiBaseUrl: string;
+  remoteBaseDir?: string;
+  maxUploadBytes?: number;
+  indexMessageId?: number;
+  indexByKey: Record<string, TelegramIndexEntry>;
 }
 
 export interface DropboxConfig {
@@ -142,6 +163,7 @@ export interface ProfilerConfig {
 
 export interface AxiomSyncPluginSettings {
   s3: S3Config;
+  telegram: TelegramConfig;
   webdav: WebdavConfig;
   dropbox: DropboxConfig;
   onedrive: OnedriveConfig;

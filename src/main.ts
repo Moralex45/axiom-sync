@@ -50,6 +50,7 @@ import {
   DEFAULT_ONEDRIVE_CONFIG,
 } from "./fsOnedrive";
 import { DEFAULT_S3_CONFIG } from "./fsS3";
+import { DEFAULT_TELEGRAM_CONFIG } from "./fsTelegram";
 import { DEFAULT_WEBDAV_CONFIG } from "./fsWebdav";
 import { DEFAULT_WEBDIS_CONFIG } from "./fsWebdis";
 import { I18n } from "./i18n";
@@ -73,6 +74,7 @@ import { SyncAlgoV3Modal } from "./syncAlgoV3Notice";
 
 const DEFAULT_SETTINGS: AxiomSyncPluginSettings = {
   s3: DEFAULT_S3_CONFIG,
+  telegram: DEFAULT_TELEGRAM_CONFIG,
   webdav: DEFAULT_WEBDAV_CONFIG,
   dropbox: DEFAULT_DROPBOX_CONFIG,
   onedrive: DEFAULT_ONEDRIVE_CONFIG,
@@ -190,7 +192,18 @@ export default class AxiomSyncPlugin extends Plugin {
   syncEvent?: Events;
   appContainerObserver?: MutationObserver;
 
-  getS3ConfigValidationErrors() {
+  getServiceConfigValidationErrors() {
+    if (this.settings.serviceType === "telegram") {
+      const errors: string[] = [];
+      if ((this.settings.telegram.botToken ?? "").trim() === "") {
+        errors.push("bot token");
+      }
+      if ((this.settings.telegram.chatId ?? "").trim() === "") {
+        errors.push("chat id");
+      }
+      return errors;
+    }
+
     const errors: string[] = [];
     if ((this.settings.s3.s3Endpoint ?? "").trim() === "") {
       errors.push("endpoint");
@@ -211,10 +224,10 @@ export default class AxiomSyncPlugin extends Plugin {
   }
 
   async syncRun(triggerSource: SyncTriggerSourceType = "manual") {
-    const s3ConfigErrors = this.getS3ConfigValidationErrors();
-    if (s3ConfigErrors.length > 0) {
+    const configErrors = this.getServiceConfigValidationErrors();
+    if (configErrors.length > 0) {
       new Notice(
-        `${this.manifest.name}: S3 is not fully configured (${s3ConfigErrors.join(
+        `${this.manifest.name}: ${this.settings.serviceType} is not fully configured (${configErrors.join(
           ", "
         )}).`,
         8000
@@ -777,11 +790,34 @@ export default class AxiomSyncPlugin extends Plugin {
       cloneDeep(DEFAULT_SETTINGS),
       messyConfigToNormal(await this.loadData())
     );
-    // S3-only build: always use S3 as sync backend.
-    this.settings.serviceType = "s3";
-
+    if (
+      this.settings.serviceType !== "s3" &&
+      this.settings.serviceType !== "telegram"
+    ) {
+      this.settings.serviceType = "s3";
+    }
     if (this.settings.syncBookmarks === undefined) {
       this.settings.syncBookmarks = false;
+    }
+
+    if (this.settings.telegram === undefined) {
+      this.settings.telegram = DEFAULT_TELEGRAM_CONFIG;
+    }
+    if (this.settings.telegram.apiBaseUrl === undefined) {
+      this.settings.telegram.apiBaseUrl = DEFAULT_TELEGRAM_CONFIG.apiBaseUrl;
+    }
+    if (this.settings.telegram.maxUploadBytes === undefined) {
+      this.settings.telegram.maxUploadBytes =
+        DEFAULT_TELEGRAM_CONFIG.maxUploadBytes;
+    }
+    if (this.settings.telegram.indexMessageId === undefined) {
+      this.settings.telegram.indexMessageId = 0;
+    }
+    if (this.settings.telegram.remoteBaseDir === undefined) {
+      this.settings.telegram.remoteBaseDir = "";
+    }
+    if (this.settings.telegram.indexByKey === undefined) {
+      this.settings.telegram.indexByKey = {};
     }
 
     if (this.settings.dropbox.clientID === "") {

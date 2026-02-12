@@ -14,6 +14,7 @@ import type {
   ConflictActionType,
   EmptyFolderCleanType,
   QRExportType,
+  SUPPORTED_SERVICES_TYPE,
   SUPPORTED_SERVICES_TYPE_WITH_REMOTE_BASE_DIR,
   SyncDirectionType,
 } from "./baseTypes";
@@ -27,6 +28,10 @@ import {
 } from "./debugMode";
 import { getClient } from "./fsGetter";
 import { simpleTransRemotePrefix } from "./fsS3";
+import {
+  type TelegramChatCandidate,
+  getTelegramChatCandidatesFromUpdates,
+} from "./fsTelegram";
 import type { LangTypeAndAuto, TransItemType } from "./i18n";
 import {
   exportQrCodeUri,
@@ -428,6 +433,64 @@ class ExportSettingsQrCodeModal extends Modal {
   }
 }
 
+class TelegramChatChooserModal extends Modal {
+  readonly plugin: AxiomSyncPlugin;
+  readonly chats: TelegramChatCandidate[];
+  readonly onSelected: (chatId: string) => Promise<void>;
+  selectedChatId: string;
+  constructor(
+    app: App,
+    plugin: AxiomSyncPlugin,
+    chats: TelegramChatCandidate[],
+    onSelected: (chatId: string) => Promise<void>
+  ) {
+    super(app);
+    this.plugin = plugin;
+    this.chats = chats;
+    this.onSelected = onSelected;
+    this.selectedChatId = chats[0]?.id ?? "";
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h2", { text: "Select Telegram Chat" });
+    contentEl.createEl("p", {
+      text: "Pick one of your recent chats from bot updates.",
+    });
+
+    new Setting(contentEl)
+      .setName("Recent chats")
+      .addDropdown((dropdown) => {
+        for (const item of this.chats) {
+          dropdown.addOption(item.id, item.label);
+        }
+        dropdown.setValue(this.selectedChatId).onChange((val) => {
+          this.selectedChatId = val;
+        });
+      });
+
+    new Setting(contentEl)
+      .addButton((button) => {
+        button.setButtonText("Use selected chat");
+        button.onClick(async () => {
+          if (this.selectedChatId === "") {
+            return;
+          }
+          await this.onSelected(this.selectedChatId);
+          this.close();
+        });
+      })
+      .addButton((button) => {
+        button.setButtonText("Cancel");
+        button.onClick(() => this.close());
+      });
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
 const getEyesElements = () => {
   const eyeEl = createElement(Eye);
   const eyeOffEl = createElement(EyeOff);
@@ -481,10 +544,6 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     // we need to create the div in advance of any other service divs
     const serviceChooserDiv = containerEl.createDiv();
     serviceChooserDiv.createEl("h2", { text: t("settings_chooseservice") });
-    serviceChooserDiv.createEl("p", {
-      cls: "s3-only-note",
-      text: t("settings_s3_only_build_note"),
-    });
 
     new Setting(serviceChooserDiv)
       .setName(t("settings_lang"))
@@ -775,7 +834,162 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
         });
       });
 
-    // S3-only build: all non-S3 service settings are removed from UI.
+    //////////////////////////////////////////////////
+    // below for telegram
+    //////////////////////////////////////////////////
+
+    const telegramDiv = serviceChooserDiv.createEl("div", { cls: "s3-hide" });
+    telegramDiv.toggleClass(
+      "s3-hide",
+      this.plugin.settings.serviceType !== "telegram"
+    );
+    telegramDiv.createEl("h3", { text: "Remote For Telegram Bot (experimental)" });
+
+    new Setting(telegramDiv)
+      .setName("Bot Token")
+      .setDesc("Telegram bot token from @BotFather.")
+      .addText((text) => {
+        wrapTextWithPasswordHide(text);
+        text
+          .setPlaceholder("")
+          .setValue(this.plugin.settings.telegram.botToken)
+          .onChange(async (value) => {
+            this.plugin.settings.telegram.botToken = value.trim();
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(telegramDiv)
+      .setName("Chat ID")
+      .setDesc("Numeric chat id or @channelusername where files are stored.")
+      .addText((text) =>
+        text
+          .setPlaceholder("")
+          .setValue(this.plugin.settings.telegram.chatId)
+          .onChange(async (value) => {
+            this.plugin.settings.telegram.chatId = value.trim();
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(telegramDiv)
+      .setName("Find Chat ID")
+      .setDesc(
+        "Load recent chats from Telegram updates and pick one automatically."
+      )
+      .addButton((button) => {
+        button.setButtonText("Find from updates");
+        button.onClick(async () => {
+          const token = (this.plugin.settings.telegram.botToken ?? "").trim();
+          if (token === "") {
+            new Notice("Please set Bot Token first.");
+            return;
+          }
+          new Notice("Loading recent chats from Telegram...");
+          try {
+            const chats = await getTelegramChatCandidatesFromUpdates(
+              token,
+              this.plugin.settings.telegram.apiBaseUrl ?? ""
+            );
+            if (chats.length === 0) {
+              new Notice(
+                "No recent chats found. Send a message to your bot, then try again."
+              );
+              return;
+            }
+            new TelegramChatChooserModal(
+              this.app,
+              this.plugin,
+              chats,
+              async (chatId: string) => {
+                this.plugin.settings.telegram.chatId = chatId;
+                await this.plugin.saveSettings();
+                new Notice(`Chat ID set to ${chatId}`);
+                this.display();
+              }
+            ).open();
+          } catch (e: any) {
+            new Notice(e?.message ?? "Failed to load chats from Telegram.");
+          }
+        });
+      });
+
+    new Setting(telegramDiv)
+      .setName("Remote Base Dir")
+      .setDesc(
+        "Optional namespace prefix. Empty means using vault name by default."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("")
+          .setValue(this.plugin.settings.telegram.remoteBaseDir ?? "")
+          .onChange(async (value) => {
+            this.plugin.settings.telegram.remoteBaseDir = value.trim();
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(telegramDiv)
+      .setName("Telegram API Base URL")
+      .setDesc("Usually keep default: https://api.telegram.org")
+      .addText((text) =>
+        text
+          .setPlaceholder("https://api.telegram.org")
+          .setValue(this.plugin.settings.telegram.apiBaseUrl ?? "")
+          .onChange(async (value) => {
+            this.plugin.settings.telegram.apiBaseUrl = value.trim();
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(telegramDiv)
+      .setName("Max Upload Size (MB)")
+      .setDesc("Default 50 MB. Files larger than this are skipped with error.")
+      .addText((text) =>
+        text
+          .setPlaceholder("50")
+          .setValue(
+            `${Math.max(
+              1,
+              Math.floor(
+                (this.plugin.settings.telegram.maxUploadBytes ?? 50 * 1024 * 1024) /
+                  (1024 * 1024)
+              )
+            )}`
+          )
+          .onChange(async (value) => {
+            const mb = Number.parseInt(value);
+            if (!Number.isNaN(mb) && mb > 0) {
+              this.plugin.settings.telegram.maxUploadBytes = mb * 1024 * 1024;
+              await this.plugin.saveSettings();
+            }
+          })
+      );
+
+    new Setting(telegramDiv)
+      .setName(t("settings_checkonnectivity"))
+      .setDesc(t("settings_checkonnectivity_desc"))
+      .addButton(async (button) => {
+        button.setButtonText(t("settings_checkonnectivity_button"));
+        button.onClick(async () => {
+          new Notice(t("settings_checkonnectivity_checking"));
+          const client = getClient(
+            this.plugin.settings,
+            this.app.vault.getName(),
+            () => this.plugin.saveSettings()
+          );
+          const errors = { msg: "" };
+          const res = await client.checkConnect((err: any) => {
+            errors.msg = err;
+          });
+          if (res) {
+            new Notice("Great! Telegram bot credentials are valid.");
+          } else {
+            new Notice("Telegram bot cannot be reached.");
+            new Notice(errors.msg);
+          }
+        });
+      });
 
     //////////////////////////////////////////////////
     // below for general chooser (part 2/2)
@@ -788,8 +1002,14 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       .setDesc(t("settings_chooseservice_desc"))
       .addDropdown((dropdown) => {
         dropdown.addOption("s3", t("settings_chooseservice_s3"));
-        dropdown.setValue("s3");
-        dropdown.setDisabled(true);
+        dropdown.addOption("telegram", "Telegram Bot (experimental)");
+        dropdown
+          .setValue(this.plugin.settings.serviceType)
+          .onChange(async (val) => {
+            this.plugin.settings.serviceType = val as SUPPORTED_SERVICES_TYPE;
+            await this.plugin.saveSettings();
+            this.display();
+          });
       });
 
     //////////////////////////////////////////////////

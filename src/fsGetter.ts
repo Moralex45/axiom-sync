@@ -1,14 +1,22 @@
 import type { AxiomSyncPluginSettings } from "./baseTypes";
 import type { FakeFs } from "./fsAll";
 import { FakeFsS3 } from "./fsS3";
+import { FakeFsTelegram } from "./fsTelegram";
 
 /**
  * To avoid circular dependency, we need a new file here.
  */
 export function getClient(
   settings: AxiomSyncPluginSettings,
-  _vaultName: string,
-  _saveUpdatedConfigFunc: () => Promise<any>
+  vaultName: string,
+  saveUpdatedConfigFunc: () => Promise<any>
 ): FakeFs {
+  if (settings.serviceType === "telegram") {
+    return new FakeFsTelegram(
+      settings.telegram,
+      vaultName,
+      saveUpdatedConfigFunc
+    );
+  }
   return new FakeFsS3(settings.s3);
 }
