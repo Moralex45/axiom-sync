@@ -1,51 +1,68 @@
 # Axiom Sync
 
-S3-focused sync plugin for Obsidian vaults.
+Sync plugin for Obsidian vaults.
 
-Author: `moralex45`
+Author: `fyears`
 
-## What It Does
+## Features
 
-- Syncs notes between local vault and S3-compatible storage
-- Supports manual sync, dry-run, and scheduled sync
-- Supports encryption and sync safety controls
-- Includes RU/EN language switching in settings
+- Sync notes between local vault and cloud storage backends.
+- Manual sync, dry-run, and scheduled sync.
+- Encryption and sync safety controls.
+- RU/EN language switching in settings.
 
-## Install (Manual)
+## Official Submission Disclosures
+
+### Internet Access
+
+This plugin requires internet access for sync operations with remote storage providers.
+
+### External Services
+
+The plugin connects only to services explicitly configured by the user, for example:
+
+- S3-compatible endpoints
+- WebDAV endpoints
+- Dropbox
+- OneDrive
+- Webdis
+
+The Pro module also supports additional providers (Google Drive, Box, pCloud, Yandex Disk, Koofr, Azure Blob Storage).
+
+### Data and Privacy
+
+- File content and metadata are transferred only to the configured storage provider.
+- OAuth tokens and provider credentials are stored locally in Obsidian plugin data.
+- The plugin does not include telemetry or analytics tracking.
+
+### Commercial / Pro Features
+
+- Core sync features are available without payment.
+- Some Pro features require a paid account at `https://remotelysave.com`.
+- This plugin and service are not affiliated with Obsidian.
+
+## Manual Install
 
 1. Build plugin:
+
 ```bash
 npm run build2
 ```
-2. Copy files into your vault plugin folder:
-`<Vault>/.obsidian/plugins/axiom-sync/`
-3. Required files:
+
+2. Copy files to `<Vault>/.obsidian/plugins/axiom-sync/`:
 - `main.js`
 - `manifest.json`
 - `styles.css`
-4. In Obsidian: `Settings -> Community plugins -> Reload plugins`
-5. Enable `Axiom Sync`
+3. In Obsidian: `Settings -> Community plugins -> Reload plugins`.
+4. Enable `Axiom Sync`.
 
-## Update (Manual)
+## Manual Update
 
 1. Rebuild:
+
 ```bash
 npm run build2
 ```
-2. Replace plugin files in:
-`<Vault>/.obsidian/plugins/axiom-sync/`
-3. Reload plugins (or restart Obsidian)
 
-## Release Checklist (Short)
-
-1. Run `npm run build2` (must pass)
-2. Verify `manifest.json`:
-- `id = axiom-sync`
-- `name = Axiom Sync`
-3. Smoke-test in Obsidian:
-- open settings
-- run `Check Connectivity`
-- run `Dry run`
-4. Confirm RU/EN switching works in settings and first modal
-5. Copy `main.js`, `manifest.json`, `styles.css` to target vault plugin folder
-6. Reload plugins and verify plugin enables without errors
+2. Replace files in `<Vault>/.obsidian/plugins/axiom-sync/`.
+3. Reload plugins (or restart Obsidian).
