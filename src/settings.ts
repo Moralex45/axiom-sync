@@ -12,7 +12,6 @@ import type { TextComponent } from "obsidian";
 import type {
   CipherMethodType,
   ConflictActionType,
-  EmptyFolderCleanType,
   QRExportType,
   SUPPORTED_SERVICES_TYPE,
   SUPPORTED_SERVICES_TYPE_WITH_REMOTE_BASE_DIR,
@@ -109,6 +108,8 @@ class PasswordModal extends Modal {
       .addButton((button) => {
         button.setButtonText(t("modal_password_secondconfirm"));
         button.onClick(async () => {
+          const wasEmpty = (this.plugin.settings.password ?? "") === "";
+          const willEnableEncryption = this.newPassword !== "";
           this.plugin.settings.password = this.newPassword;
           if (this.newPassword !== "") {
             this.encryptionMethodSetting.settingEl.removeClass(
@@ -122,6 +123,9 @@ class PasswordModal extends Modal {
 
           await this.plugin.saveSettings();
           new Notice(t("modal_password_notice"));
+          if (wasEmpty && willEnableEncryption) {
+            new Notice(t("modal_password_notice_encrypt_transition"), 15000);
+          }
           this.close();
         });
         button.setClass("password-second-confirm");
@@ -453,13 +457,14 @@ class TelegramChatChooserModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h2", { text: "Select Telegram Chat" });
+    const t = (x: TransItemType, vars?: any) => this.plugin.i18n.t(x, vars);
+    contentEl.createEl("h2", { text: t("modal_telegram_chatchooser_title") });
     contentEl.createEl("p", {
-      text: "Pick one of your recent chats from bot updates.",
+      text: t("modal_telegram_chatchooser_desc"),
     });
 
     new Setting(contentEl)
-      .setName("Recent chats")
+      .setName(t("modal_telegram_chatchooser_recent"))
       .addDropdown((dropdown) => {
         for (const item of this.chats) {
           dropdown.addOption(item.id, item.label);
@@ -471,7 +476,7 @@ class TelegramChatChooserModal extends Modal {
 
     new Setting(contentEl)
       .addButton((button) => {
-        button.setButtonText("Use selected chat");
+        button.setButtonText(t("modal_telegram_chatchooser_use"));
         button.onClick(async () => {
           if (this.selectedChatId === "") {
             return;
@@ -481,7 +486,7 @@ class TelegramChatChooserModal extends Modal {
         });
       })
       .addButton((button) => {
-        button.setButtonText("Cancel");
+        button.setButtonText(t("modal_telegram_chatchooser_cancel"));
         button.onClick(() => this.close());
       });
   }
@@ -549,12 +554,36 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       .setName(t("settings_lang"))
       .setDesc(t("settings_lang_desc"))
       .addDropdown((dropdown) => {
+        const currentLang = this.plugin.settings.lang ?? "auto";
+        const allowed: LangTypeAndAuto[] = ["auto", "en", "ru", "zh_cn", "zh_tw"];
+        const selected = allowed.includes(currentLang) ? currentLang : "auto";
         dropdown
+          .addOption("auto", "Auto (system)")
           .addOption("en", t("settings_lang_en"))
           .addOption("ru", t("settings_lang_ru"))
-          .setValue(this.plugin.settings.lang === "ru" ? "ru" : "en")
+          .addOption("zh_cn", "简体中文")
+          .addOption("zh_tw", "繁體中文")
+          .setValue(selected)
           .onChange(async (val) => {
+            if (val === this.plugin.settings.lang) {
+              return;
+            }
             await this.plugin.i18n.changeTo(val as LangTypeAndAuto);
+            this.display();
+          });
+      });
+
+    new Setting(serviceChooserDiv)
+      .setName(t("settings_chooseservice"))
+      .setDesc(t("settings_chooseservice_desc"))
+      .addDropdown((dropdown) => {
+        dropdown.addOption("s3", t("settings_chooseservice_s3"));
+        dropdown.addOption("telegram", t("settings_chooseservice_telegram"));
+        dropdown
+          .setValue(this.plugin.settings.serviceType)
+          .onChange(async (val) => {
+            this.plugin.settings.serviceType = val as SUPPORTED_SERVICES_TYPE;
+            await this.plugin.saveSettings();
             this.display();
           });
       });
@@ -843,11 +872,11 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       "s3-hide",
       this.plugin.settings.serviceType !== "telegram"
     );
-    telegramDiv.createEl("h3", { text: "Remote For Telegram Bot (experimental)" });
+    telegramDiv.createEl("h3", { text: t("settings_telegram_section") });
 
     new Setting(telegramDiv)
-      .setName("Bot Token")
-      .setDesc("Telegram bot token from @BotFather.")
+      .setName(t("settings_telegram_bot_token"))
+      .setDesc(t("settings_telegram_bot_token_desc"))
       .addText((text) => {
         wrapTextWithPasswordHide(text);
         text
@@ -860,8 +889,8 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       });
 
     new Setting(telegramDiv)
-      .setName("Chat ID")
-      .setDesc("Numeric chat id or @channelusername where files are stored.")
+      .setName(t("settings_telegram_chat_id"))
+      .setDesc(t("settings_telegram_chat_id_desc"))
       .addText((text) =>
         text
           .setPlaceholder("")
@@ -873,28 +902,24 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(telegramDiv)
-      .setName("Find Chat ID")
-      .setDesc(
-        "Load recent chats from Telegram updates and pick one automatically."
-      )
+      .setName(t("settings_telegram_find_chat"))
+      .setDesc(t("settings_telegram_find_chat_desc"))
       .addButton((button) => {
-        button.setButtonText("Find from updates");
+        button.setButtonText(t("settings_telegram_find_chat_button"));
         button.onClick(async () => {
           const token = (this.plugin.settings.telegram.botToken ?? "").trim();
           if (token === "") {
-            new Notice("Please set Bot Token first.");
+            new Notice(t("settings_telegram_find_chat_require_token"));
             return;
           }
-          new Notice("Loading recent chats from Telegram...");
+          new Notice(t("settings_telegram_find_chat_loading"));
           try {
             const chats = await getTelegramChatCandidatesFromUpdates(
               token,
               this.plugin.settings.telegram.apiBaseUrl ?? ""
             );
             if (chats.length === 0) {
-              new Notice(
-                "No recent chats found. Send a message to your bot, then try again."
-              );
+              new Notice(t("settings_telegram_find_chat_empty"));
               return;
             }
             new TelegramChatChooserModal(
@@ -904,21 +929,19 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
               async (chatId: string) => {
                 this.plugin.settings.telegram.chatId = chatId;
                 await this.plugin.saveSettings();
-                new Notice(`Chat ID set to ${chatId}`);
+                new Notice(t("settings_telegram_chat_id_set", { chatId }));
                 this.display();
               }
             ).open();
           } catch (e: any) {
-            new Notice(e?.message ?? "Failed to load chats from Telegram.");
+            new Notice(e?.message ?? t("settings_telegram_find_chat_failed"));
           }
         });
       });
 
     new Setting(telegramDiv)
-      .setName("Remote Base Dir")
-      .setDesc(
-        "Optional namespace prefix. Empty means using vault name by default."
-      )
+      .setName(t("settings_telegram_remote_base_dir"))
+      .setDesc(t("settings_telegram_remote_base_dir_desc"))
       .addText((text) =>
         text
           .setPlaceholder("")
@@ -930,8 +953,8 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(telegramDiv)
-      .setName("Telegram API Base URL")
-      .setDesc("Usually keep default: https://api.telegram.org")
+      .setName(t("settings_telegram_api_base_url"))
+      .setDesc(t("settings_telegram_api_base_url_desc"))
       .addText((text) =>
         text
           .setPlaceholder("https://api.telegram.org")
@@ -943,8 +966,8 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(telegramDiv)
-      .setName("Max Upload Size (MB)")
-      .setDesc("Default 50 MB. Files larger than this are skipped with error.")
+      .setName(t("settings_telegram_max_upload_mb"))
+      .setDesc(t("settings_telegram_max_upload_mb_desc"))
       .addText((text) =>
         text
           .setPlaceholder("50")
@@ -983,33 +1006,12 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
             errors.msg = err;
           });
           if (res) {
-            new Notice("Great! Telegram bot credentials are valid.");
+            new Notice(t("settings_telegram_connect_succ"));
           } else {
-            new Notice("Telegram bot cannot be reached.");
+            new Notice(t("settings_telegram_connect_fail"));
             new Notice(errors.msg);
           }
         });
-      });
-
-    //////////////////////////////////////////////////
-    // below for general chooser (part 2/2)
-    //////////////////////////////////////////////////
-
-    // we need to create chooser
-    // after all service-div-s being created
-    new Setting(serviceChooserDiv)
-      .setName(t("settings_chooseservice"))
-      .setDesc(t("settings_chooseservice_desc"))
-      .addDropdown((dropdown) => {
-        dropdown.addOption("s3", t("settings_chooseservice_s3"));
-        dropdown.addOption("telegram", "Telegram Bot (experimental)");
-        dropdown
-          .setValue(this.plugin.settings.serviceType)
-          .onChange(async (val) => {
-            this.plugin.settings.serviceType = val as SUPPORTED_SERVICES_TYPE;
-            await this.plugin.saveSettings();
-            this.display();
-          });
       });
 
     //////////////////////////////////////////////////
@@ -1021,6 +1023,17 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
 
     const passwordSetting = new Setting(basicDiv);
     const encryptionMethodSetting = new Setting(basicDiv);
+
+    const encryptionWarningDiv = basicDiv.createEl("div", {
+      cls: "settings-long-desc",
+    });
+    encryptionWarningDiv.createEl("p", {
+      text: t("settings_encryption_transition_warning"),
+      cls: "password-disclaimer",
+    });
+    encryptionWarningDiv.createEl("p", {
+      text: t("settings_encryption_transition_warning_desc"),
+    });
 
     let newPassword = `${this.plugin.settings.password}`;
     passwordSetting

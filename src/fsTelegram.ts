@@ -49,6 +49,53 @@ export interface TelegramChatCandidate {
   label: string;
 }
 
+type ObsidianRequestUrl = (param: {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string | ArrayBuffer;
+  contentType?: string;
+}) => Promise<{
+  status: number;
+  text: string;
+  json?: any;
+  arrayBuffer: ArrayBuffer;
+  headers: Record<string, string>;
+}>;
+
+const tryGetObsidianRequestUrl = (): ObsidianRequestUrl | undefined => {
+  try {
+    const injected = (globalThis as any)?.__axiomSyncRequestUrl;
+    if (typeof injected === "function") {
+      return injected as ObsidianRequestUrl;
+    }
+
+    const fromGlobal =
+      (globalThis as any)?.window?.require ??
+      (globalThis as any)?.require ??
+      (globalThis as any)?.window?.module?.require ??
+      (globalThis as any)?.module?.require;
+    const req =
+      fromGlobal ??
+      (() => {
+        try {
+          return Function(
+            "return (typeof require !== 'undefined') ? require : undefined;"
+          )();
+        } catch (e) {
+          return undefined;
+        }
+      })();
+    if (typeof req !== "function") {
+      return undefined;
+    }
+    const obsidianModule = req("obsidian");
+    return obsidianModule?.requestUrl as ObsidianRequestUrl | undefined;
+  } catch (e) {
+    return undefined;
+  }
+};
+
 interface TelegramMessage {
   message_id: number;
   caption?: string;
@@ -75,8 +122,16 @@ interface TelegramRemoteIndex {
   indexByKey: Record<string, TelegramIndexEntry>;
 }
 
-const normApiBaseUrl = (apiBaseUrl: string) =>
-  (apiBaseUrl ?? "").trim().replace(/\/+$/, "") || "https://api.telegram.org";
+const normApiBaseUrl = (apiBaseUrl: string) => {
+  let u = (apiBaseUrl ?? "").trim().replace(/\/+$/, "");
+  if (u === "") {
+    u = "https://api.telegram.org";
+  }
+  if (!(u.startsWith("https://") || u.startsWith("http://"))) {
+    u = `https://${u}`;
+  }
+  return u;
+};
 
 const normalizeRemoteBaseDir = (remoteBaseDir?: string) => {
   let p = path.posix.normalize((remoteBaseDir ?? "").trim());
@@ -134,6 +189,59 @@ const getRetryAfterMs = (
   return undefined;
 };
 
+const toUint8Array = (input: string | Uint8Array | ArrayBuffer) => {
+  if (typeof input === "string") {
+    return new TextEncoder().encode(input);
+  }
+  if (input instanceof Uint8Array) {
+    return input;
+  }
+  return new Uint8Array(input);
+};
+
+const concatUint8Array = (parts: (string | Uint8Array | ArrayBuffer)[]) => {
+  const arrays = parts.map((x) => toUint8Array(x));
+  const total = arrays.reduce((s, a) => s + a.byteLength, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const arr of arrays) {
+    merged.set(arr, offset);
+    offset += arr.byteLength;
+  }
+  return merged.buffer;
+};
+
+const formDataToMultipart = async (formData: FormData) => {
+  const boundary = `----axiom-sync-${Date.now().toString(16)}-${Math.random()
+    .toString(16)
+    .slice(2)}`;
+  const chunks: (string | Uint8Array | ArrayBuffer)[] = [];
+  for (const [name, value] of formData.entries()) {
+    chunks.push(`--${boundary}\r\n`);
+    if (typeof value === "string") {
+      chunks.push(
+        `Content-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`
+      );
+      continue;
+    }
+
+    const filename = (value as File).name ?? "blob";
+    const contentType =
+      (value as Blob).type === "" ? "application/octet-stream" : (value as Blob).type;
+    chunks.push(
+      `Content-Disposition: form-data; name="${name}"; filename="${filename}"\r\n`
+    );
+    chunks.push(`Content-Type: ${contentType}\r\n\r\n`);
+    chunks.push(await (value as Blob).arrayBuffer());
+    chunks.push("\r\n");
+  }
+  chunks.push(`--${boundary}--\r\n`);
+  return {
+    contentType: `multipart/form-data; boundary=${boundary}`,
+    body: concatUint8Array(chunks),
+  };
+};
+
 export const getTelegramChatCandidatesFromUpdates = async (
   botToken: string,
   apiBaseUrl: string
@@ -143,10 +251,31 @@ export const getTelegramChatCandidatesFromUpdates = async (
     throw Error("telegram: bot token is empty");
   }
   const url = `${normApiBaseUrl(apiBaseUrl)}/bot${token}/getUpdates`;
-  const rsp = await fetch(url);
-  const data = (await rsp.json()) as TelegramApiResp<TelegramUpdateEnvelope[]>;
-  if (!rsp.ok || data.ok !== true) {
-    throw Error(`telegram api getUpdates failed: ${data.description ?? rsp.statusText}`);
+  let data: TelegramApiResp<TelegramUpdateEnvelope[]>;
+  try {
+    const obsidianRequestUrl = tryGetObsidianRequestUrl();
+
+    if (obsidianRequestUrl !== undefined) {
+      const rsp = await obsidianRequestUrl({ url, method: "GET" });
+      data =
+        (rsp.json as TelegramApiResp<TelegramUpdateEnvelope[]>) ??
+        (JSON.parse(rsp.text) as TelegramApiResp<TelegramUpdateEnvelope[]>);
+    } else {
+      const fetchRsp = await fetch(url);
+      data = (await fetchRsp.json()) as TelegramApiResp<TelegramUpdateEnvelope[]>;
+      if (!fetchRsp.ok) {
+        throw Error(data.description ?? fetchRsp.statusText);
+      }
+    }
+  } catch (e: any) {
+    throw Error(
+      `telegram getUpdates request failed: ${
+        e?.message ?? "network error"
+      }`
+    );
+  }
+  if (data.ok !== true) {
+    throw Error(`telegram api getUpdates failed: ${data.description ?? "unknown error"}`);
   }
 
   const chatsMap = new Map<string, TelegramChatCandidate>();
@@ -189,6 +318,7 @@ export class FakeFsTelegram extends FakeFs {
   remoteIndexDirty: boolean;
   remoteIndexFlushPromise?: Promise<void>;
   remoteIndexFlushTimer?: ReturnType<typeof setTimeout>;
+  obsidianRequestUrl?: ObsidianRequestUrl | null;
 
   constructor(
     telegramConfig: TelegramConfig,
@@ -202,6 +332,7 @@ export class FakeFsTelegram extends FakeFs {
     this.saveUpdatedConfigFunc = saveUpdatedConfigFunc;
     this.remoteIndexLoaded = false;
     this.remoteIndexDirty = false;
+    this.obsidianRequestUrl = undefined;
   }
 
   private getApiBaseUrl() {
@@ -259,6 +390,14 @@ export class FakeFsTelegram extends FakeFs {
     return configured;
   }
 
+  private async getObsidianRequestUrl() {
+    if (this.obsidianRequestUrl !== undefined) {
+      return this.obsidianRequestUrl;
+    }
+    this.obsidianRequestUrl = tryGetObsidianRequestUrl() ?? null;
+    return this.obsidianRequestUrl;
+  }
+
   private async callApi<T>(
     method: string,
     initFactory?: () => RequestInit
@@ -274,21 +413,58 @@ export class FakeFsTelegram extends FakeFs {
       }
 
       try {
-        const rsp = await fetch(url, initFactory?.());
+        const init = initFactory?.() ?? {};
+        const reqUrl = await this.getObsidianRequestUrl();
+        let status = 0;
         let data: TelegramApiResp<T> | undefined = undefined;
-        try {
-          data = (await rsp.json()) as TelegramApiResp<T>;
-        } catch (e) {
-          data = undefined;
+        let retryAfterHeader: string | null = null;
+
+        if (reqUrl !== null && reqUrl !== undefined) {
+          let body = init.body as any;
+          let contentType = (init.headers as any)?.["content-type"] as
+            | string
+            | undefined;
+          let headers: Record<string, string> | undefined = undefined;
+          if (init.headers !== undefined) {
+            headers = Object.fromEntries(
+              Object.entries(init.headers as any).map(([k, v]) => [k, `${v}`])
+            );
+          }
+          if (body instanceof FormData) {
+            const transformed = await formDataToMultipart(body);
+            body = transformed.body;
+            contentType = transformed.contentType;
+          }
+          const rsp = await reqUrl({
+            url,
+            method: init.method,
+            headers,
+            body: body as any,
+            contentType,
+          });
+          status = rsp.status;
+          retryAfterHeader = rsp.headers?.["retry-after"] ?? null;
+          data =
+            (rsp.json as TelegramApiResp<T>) ??
+            (JSON.parse(rsp.text) as TelegramApiResp<T>);
+        } else {
+          const rsp = await fetch(url, init);
+          status = rsp.status;
+          retryAfterHeader = rsp.headers.get("retry-after");
+          try {
+            data = (await rsp.json()) as TelegramApiResp<T>;
+          } catch (e) {
+            data = undefined;
+          }
         }
 
-        if (rsp.ok && data?.ok === true) {
+        if (status >= 200 && status < 300 && data?.ok === true) {
           return data;
         }
 
-        if (shouldRetryStatus(rsp.status)) {
+        if (shouldRetryStatus(status)) {
           const extraWait = getRetryAfterMs(
-            rsp.headers.get("retry-after"),
+            retryAfterHeader,
             data?.description
           );
           if (extraWait !== undefined) {
@@ -296,14 +472,16 @@ export class FakeFsTelegram extends FakeFs {
           }
           lastError = Error(
             `telegram api ${method} failed: ${
-              data?.description ?? rsp.statusText
+              data?.description ?? `status ${status}`
             }`
           );
           continue;
         }
 
         throw Error(
-          `telegram api ${method} failed: ${data?.description ?? rsp.statusText}`
+          `telegram api ${method} failed: ${
+            data?.description ?? `status ${status}`
+          }`
         );
       } catch (e: any) {
         lastError = e;
@@ -322,6 +500,23 @@ export class FakeFsTelegram extends FakeFs {
         await delay(retryMs[idx]);
       }
       try {
+        const reqUrl = await this.getObsidianRequestUrl();
+        if (reqUrl !== null && reqUrl !== undefined) {
+          const rsp = await reqUrl({ url, method: "GET" });
+          if (rsp.status >= 200 && rsp.status < 300) {
+            return rsp.arrayBuffer;
+          }
+          if (shouldRetryStatus(rsp.status)) {
+            const extraWait = getRetryAfterMs(rsp.headers?.["retry-after"] ?? null);
+            if (extraWait !== undefined) {
+              await delay(extraWait);
+            }
+            lastError = Error(`telegram download failed: ${rsp.status}`);
+            continue;
+          }
+          throw Error(`telegram download failed: ${rsp.status}`);
+        }
+
         const rsp = await fetch(url);
         if (rsp.ok) {
           return await rsp.arrayBuffer();

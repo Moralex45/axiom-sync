@@ -12,7 +12,7 @@ import type {
   PCloudConfig,
   ProConfig,
   YandexDiskConfig,
-} from "../pro/src/baseTypesPro";
+} from "../advanced/src/baseTypesPro";
 import type { LangTypeAndAuto } from "./i18n";
 
 // S3-only build: keep non-S3 constants as empty values for compatibility.
@@ -302,11 +302,6 @@ export interface Entity {
   etag?: string;
   synthesizedFolder?: boolean;
   synthesizedFile?: boolean;
-}
-
-export interface UploadedType {
-  entity: Entity;
-  mtimeCli?: number;
 }
 
 /**

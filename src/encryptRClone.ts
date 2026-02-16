@@ -13,6 +13,27 @@ interface RecvMsg {
   error?: any;
 }
 
+const getWorkerErrorMessage = (op: string, err: unknown) => {
+  if (err instanceof Error && err.message !== "") {
+    return `${op}: ${err.message}`;
+  }
+  if (typeof err === "string" && err.trim() !== "") {
+    return `${op}: ${err}`;
+  }
+  if (err !== undefined) {
+    try {
+      const text = JSON.stringify(err);
+      if (text !== undefined && text !== "{}" && text !== "null") {
+        return `${op}: ${text}`;
+      }
+    } catch (e) {
+      // ignore and fallback below
+    }
+    return `${op}: ${String(err)}`;
+  }
+  return `${op}: worker returned unknown error`;
+};
+
 export const getSizeFromOrigToEnc = encryptedSize;
 
 export class CipherRclone {
@@ -61,13 +82,13 @@ export class CipherRclone {
 
           channel.port2.onmessage = (event) => {
             // console.debug("main: receiving msg in prepare");
-            const { status } = event.data as RecvMsg;
+            const { status, error } = event.data as RecvMsg;
             if (status === "ok") {
               // console.debug("main: receiving init ok in prepare");
               this.init = true;
               resolve(); // return the class object itself
             } else {
-              reject("error after prepareByCallingWorker");
+              reject(new Error(getWorkerErrorMessage("prepare", error)));
             }
           };
 
@@ -105,9 +126,15 @@ export class CipherRclone {
 
       channel.port2.onmessage = (event) => {
         // console.debug("main: receiving msg in encryptNameByCallingWorker");
-        const { outputName } = event.data as RecvMsg;
+        const { outputName, status, error } = event.data as RecvMsg;
+        if (status === "error") {
+          reject(new Error(getWorkerErrorMessage("encryptName", error)));
+          return;
+        }
         if (outputName === undefined) {
-          reject("unknown outputName after encryptNameByCallingWorker");
+          reject(
+            new Error("encryptNameByCallingWorker: outputName is undefined")
+          );
         } else {
           resolve(outputName);
         }
@@ -138,13 +165,15 @@ export class CipherRclone {
 
       channel.port2.onmessage = (event) => {
         // console.debug("main: receiving msg in decryptNameByCallingWorker");
-        const { outputName, status } = event.data as RecvMsg;
+        const { outputName, status, error } = event.data as RecvMsg;
 
         if (status === "error") {
-          reject("error");
+          reject(new Error(getWorkerErrorMessage("decryptName", error)));
         } else {
           if (outputName === undefined) {
-            reject("unknown outputName after decryptNameByCallingWorker");
+            reject(
+              new Error("decryptNameByCallingWorker: outputName is undefined")
+            );
           } else {
             resolve(outputName);
           }
@@ -179,9 +208,15 @@ export class CipherRclone {
 
       channel.port2.onmessage = (event) => {
         // console.debug("main: receiving msg in encryptContentByCallingWorker");
-        const { outputContent } = event.data as RecvMsg;
+        const { outputContent, status, error } = event.data as RecvMsg;
+        if (status === "error") {
+          reject(new Error(getWorkerErrorMessage("encryptContent", error)));
+          return;
+        }
         if (outputContent === undefined) {
-          reject("unknown outputContent after encryptContentByCallingWorker");
+          reject(
+            new Error("encryptContentByCallingWorker: outputContent is undefined")
+          );
         } else {
           resolve(outputContent);
         }
@@ -219,13 +254,15 @@ export class CipherRclone {
 
       channel.port2.onmessage = (event) => {
         // console.debug("main: receiving msg in decryptContentByCallingWorker");
-        const { outputContent, status } = event.data as RecvMsg;
+        const { outputContent, status, error } = event.data as RecvMsg;
 
         if (status === "error") {
-          reject("error");
+          reject(new Error(getWorkerErrorMessage("decryptContent", error)));
         } else {
           if (outputContent === undefined) {
-            reject("unknown outputContent after decryptContentByCallingWorker");
+            reject(
+              new Error("decryptContentByCallingWorker: outputContent is undefined")
+            );
           } else {
             resolve(outputContent);
           }

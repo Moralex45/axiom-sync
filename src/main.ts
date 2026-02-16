@@ -13,24 +13,25 @@ import {
   type Setting,
   TFolder,
   addIcon,
+  requestUrl,
   requireApiVersion,
   setIcon,
 } from "obsidian";
 import {
   DEFAULT_PRO_CONFIG,
-} from "../pro/src/account";
-import { DEFAULT_AZUREBLOBSTORAGE_CONFIG } from "../pro/src/fsAzureBlobStorage";
-import { DEFAULT_BOX_CONFIG } from "../pro/src/fsBox";
-import { DEFAULT_GOOGLEDRIVE_CONFIG } from "../pro/src/fsGoogleDrive";
-import { DEFAULT_KOOFR_CONFIG } from "../pro/src/fsKoofr";
+} from "../advanced/src/account";
+import { DEFAULT_AZUREBLOBSTORAGE_CONFIG } from "../advanced/src/fsAzureBlobStorage";
+import { DEFAULT_BOX_CONFIG } from "../advanced/src/fsBox";
+import { DEFAULT_GOOGLEDRIVE_CONFIG } from "../advanced/src/fsGoogleDrive";
+import { DEFAULT_KOOFR_CONFIG } from "../advanced/src/fsKoofr";
 import {
   DEFAULT_ONEDRIVEFULL_CONFIG,
-} from "../pro/src/fsOnedriveFull";
+} from "../advanced/src/fsOnedriveFull";
 import {
   DEFAULT_PCLOUD_CONFIG,
-} from "../pro/src/fsPCloud";
-import { DEFAULT_YANDEXDISK_CONFIG } from "../pro/src/fsYandexDisk";
-import { syncer } from "../pro/src/sync";
+} from "../advanced/src/fsPCloud";
+import { DEFAULT_YANDEXDISK_CONFIG } from "../advanced/src/fsYandexDisk";
+import { syncer } from "../advanced/src/sync";
 import type {
   AxiomSyncPluginSettings,
   SyncTriggerSourceType,
@@ -296,6 +297,8 @@ export default class AxiomSyncPlugin extends Plugin {
       }
     };
 
+    let syncHadError = false;
+
     const notifyFunc = async (s: SyncTriggerSourceType, step: number) => {
       switch (step) {
         case 0:
@@ -384,6 +387,9 @@ export default class AxiomSyncPlugin extends Plugin {
           break;
 
         case 8:
+          if (syncHadError) {
+            break;
+          }
           if (this.settings.currLogLevel === "info") {
             getNotice(s, t("syncrun_shortstep2"));
           } else {
@@ -397,12 +403,29 @@ export default class AxiomSyncPlugin extends Plugin {
     };
 
     const errNotifyFunc = async (s: SyncTriggerSourceType, error: Error) => {
+      syncHadError = true;
       console.error(error);
-      if (error instanceof AggregateError) {
-        for (const e of error.errors) {
-          getNotice(s, e.message, 10 * 1000);
+      let shown = false;
+      try {
+        const errs = (error as any)?.errors;
+        const isAggregateLike =
+          error instanceof AggregateError ||
+          Array.isArray(errs) ||
+          (errs !== undefined && typeof errs?.[Symbol.iterator] === "function");
+        if (isAggregateLike) {
+          for (const e of errs as Iterable<any>) {
+            const msg = (e as any)?.message ?? `${e}`;
+            getNotice(s, msg, 10 * 1000);
+            shown = true;
+          }
+        } else {
+          getNotice(s, error?.message ?? "error while sync", 10 * 1000);
+          shown = true;
         }
-      } else {
+      } catch (e: any) {
+        console.error(e);
+      }
+      if (!shown) {
         getNotice(s, error?.message ?? "error while sync", 10 * 1000);
       }
     };
@@ -518,6 +541,8 @@ export default class AxiomSyncPlugin extends Plugin {
 
   async onload() {
     console.info(`loading plugin ${this.manifest.id}`);
+    // Make Obsidian requestUrl accessible to adapters instantiated outside this module.
+    (globalThis as any).__axiomSyncRequestUrl = requestUrl;
 
     const { iconSvgSyncWait, iconSvgSyncRunning, iconSvgLogs } = getIconSvg();
 
@@ -996,7 +1021,8 @@ export default class AxiomSyncPlugin extends Plugin {
    * After 202403 the data should be of profile based.
    */
   getCurrProfileID() {
-    return "s3-default-1";
+    const serviceType = this.settings?.serviceType ?? "s3";
+    return `${serviceType}-default-1`;
   }
 
   async checkIfOauthExpires() {

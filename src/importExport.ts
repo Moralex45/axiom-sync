@@ -1,7 +1,7 @@
 import cloneDeep from "lodash/cloneDeep";
 import QRCode from "qrcode";
 
-import { getShrinkedSettings as getShrinkedSettingsOnedriveFull } from "../pro/src/fsOnedriveFull";
+import { getShrinkedSettings as getShrinkedSettingsOnedriveFull } from "../advanced/src/fsOnedriveFull";
 import {
   COMMAND_URI,
   type QRExportType,
