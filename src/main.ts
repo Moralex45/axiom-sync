@@ -13,24 +13,25 @@ import {
   type Setting,
   TFolder,
   addIcon,
+  requestUrl,
   requireApiVersion,
   setIcon,
 } from "obsidian";
 import {
   DEFAULT_PRO_CONFIG,
-} from "../pro/src/account";
-import { DEFAULT_AZUREBLOBSTORAGE_CONFIG } from "../pro/src/fsAzureBlobStorage";
-import { DEFAULT_BOX_CONFIG } from "../pro/src/fsBox";
-import { DEFAULT_GOOGLEDRIVE_CONFIG } from "../pro/src/fsGoogleDrive";
-import { DEFAULT_KOOFR_CONFIG } from "../pro/src/fsKoofr";
+} from "../advanced/src/account";
+import { DEFAULT_AZUREBLOBSTORAGE_CONFIG } from "../advanced/src/fsAzureBlobStorage";
+import { DEFAULT_BOX_CONFIG } from "../advanced/src/fsBox";
+import { DEFAULT_GOOGLEDRIVE_CONFIG } from "../advanced/src/fsGoogleDrive";
+import { DEFAULT_KOOFR_CONFIG } from "../advanced/src/fsKoofr";
 import {
   DEFAULT_ONEDRIVEFULL_CONFIG,
-} from "../pro/src/fsOnedriveFull";
+} from "../advanced/src/fsOnedriveFull";
 import {
   DEFAULT_PCLOUD_CONFIG,
-} from "../pro/src/fsPCloud";
-import { DEFAULT_YANDEXDISK_CONFIG } from "../pro/src/fsYandexDisk";
-import { syncer } from "../pro/src/sync";
+} from "../advanced/src/fsPCloud";
+import { DEFAULT_YANDEXDISK_CONFIG } from "../advanced/src/fsYandexDisk";
+import { syncer } from "../advanced/src/sync";
 import type {
   AxiomSyncPluginSettings,
   SyncTriggerSourceType,
@@ -50,6 +51,7 @@ import {
   DEFAULT_ONEDRIVE_CONFIG,
 } from "./fsOnedrive";
 import { DEFAULT_S3_CONFIG } from "./fsS3";
+import { DEFAULT_TELEGRAM_CONFIG } from "./fsTelegram";
 import { DEFAULT_WEBDAV_CONFIG } from "./fsWebdav";
 import { DEFAULT_WEBDIS_CONFIG } from "./fsWebdis";
 import { I18n } from "./i18n";
@@ -73,6 +75,7 @@ import { SyncAlgoV3Modal } from "./syncAlgoV3Notice";
 
 const DEFAULT_SETTINGS: AxiomSyncPluginSettings = {
   s3: DEFAULT_S3_CONFIG,
+  telegram: DEFAULT_TELEGRAM_CONFIG,
   webdav: DEFAULT_WEBDAV_CONFIG,
   dropbox: DEFAULT_DROPBOX_CONFIG,
   onedrive: DEFAULT_ONEDRIVE_CONFIG,
@@ -190,7 +193,18 @@ export default class AxiomSyncPlugin extends Plugin {
   syncEvent?: Events;
   appContainerObserver?: MutationObserver;
 
-  getS3ConfigValidationErrors() {
+  getServiceConfigValidationErrors() {
+    if (this.settings.serviceType === "telegram") {
+      const errors: string[] = [];
+      if ((this.settings.telegram.botToken ?? "").trim() === "") {
+        errors.push("bot token");
+      }
+      if ((this.settings.telegram.chatId ?? "").trim() === "") {
+        errors.push("chat id");
+      }
+      return errors;
+    }
+
     const errors: string[] = [];
     if ((this.settings.s3.s3Endpoint ?? "").trim() === "") {
       errors.push("endpoint");
@@ -211,10 +225,10 @@ export default class AxiomSyncPlugin extends Plugin {
   }
 
   async syncRun(triggerSource: SyncTriggerSourceType = "manual") {
-    const s3ConfigErrors = this.getS3ConfigValidationErrors();
-    if (s3ConfigErrors.length > 0) {
+    const configErrors = this.getServiceConfigValidationErrors();
+    if (configErrors.length > 0) {
       new Notice(
-        `${this.manifest.name}: S3 is not fully configured (${s3ConfigErrors.join(
+        `${this.manifest.name}: ${this.settings.serviceType} is not fully configured (${configErrors.join(
           ", "
         )}).`,
         8000
@@ -282,6 +296,8 @@ export default class AxiomSyncPlugin extends Plugin {
         new Notice(msg, timeout);
       }
     };
+
+    let syncHadError = false;
 
     const notifyFunc = async (s: SyncTriggerSourceType, step: number) => {
       switch (step) {
@@ -371,6 +387,9 @@ export default class AxiomSyncPlugin extends Plugin {
           break;
 
         case 8:
+          if (syncHadError) {
+            break;
+          }
           if (this.settings.currLogLevel === "info") {
             getNotice(s, t("syncrun_shortstep2"));
           } else {
@@ -384,12 +403,29 @@ export default class AxiomSyncPlugin extends Plugin {
     };
 
     const errNotifyFunc = async (s: SyncTriggerSourceType, error: Error) => {
+      syncHadError = true;
       console.error(error);
-      if (error instanceof AggregateError) {
-        for (const e of error.errors) {
-          getNotice(s, e.message, 10 * 1000);
+      let shown = false;
+      try {
+        const errs = (error as any)?.errors;
+        const isAggregateLike =
+          error instanceof AggregateError ||
+          Array.isArray(errs) ||
+          (errs !== undefined && typeof errs?.[Symbol.iterator] === "function");
+        if (isAggregateLike) {
+          for (const e of errs as Iterable<any>) {
+            const msg = (e as any)?.message ?? `${e}`;
+            getNotice(s, msg, 10 * 1000);
+            shown = true;
+          }
+        } else {
+          getNotice(s, error?.message ?? "error while sync", 10 * 1000);
+          shown = true;
         }
-      } else {
+      } catch (e: any) {
+        console.error(e);
+      }
+      if (!shown) {
         getNotice(s, error?.message ?? "error while sync", 10 * 1000);
       }
     };
@@ -505,6 +541,8 @@ export default class AxiomSyncPlugin extends Plugin {
 
   async onload() {
     console.info(`loading plugin ${this.manifest.id}`);
+    // Make Obsidian requestUrl accessible to adapters instantiated outside this module.
+    (globalThis as any).__axiomSyncRequestUrl = requestUrl;
 
     const { iconSvgSyncWait, iconSvgSyncRunning, iconSvgLogs } = getIconSvg();
 
@@ -777,11 +815,34 @@ export default class AxiomSyncPlugin extends Plugin {
       cloneDeep(DEFAULT_SETTINGS),
       messyConfigToNormal(await this.loadData())
     );
-    // S3-only build: always use S3 as sync backend.
-    this.settings.serviceType = "s3";
-
+    if (
+      this.settings.serviceType !== "s3" &&
+      this.settings.serviceType !== "telegram"
+    ) {
+      this.settings.serviceType = "s3";
+    }
     if (this.settings.syncBookmarks === undefined) {
       this.settings.syncBookmarks = false;
+    }
+
+    if (this.settings.telegram === undefined) {
+      this.settings.telegram = DEFAULT_TELEGRAM_CONFIG;
+    }
+    if (this.settings.telegram.apiBaseUrl === undefined) {
+      this.settings.telegram.apiBaseUrl = DEFAULT_TELEGRAM_CONFIG.apiBaseUrl;
+    }
+    if (this.settings.telegram.maxUploadBytes === undefined) {
+      this.settings.telegram.maxUploadBytes =
+        DEFAULT_TELEGRAM_CONFIG.maxUploadBytes;
+    }
+    if (this.settings.telegram.indexMessageId === undefined) {
+      this.settings.telegram.indexMessageId = 0;
+    }
+    if (this.settings.telegram.remoteBaseDir === undefined) {
+      this.settings.telegram.remoteBaseDir = "";
+    }
+    if (this.settings.telegram.indexByKey === undefined) {
+      this.settings.telegram.indexByKey = {};
     }
 
     if (this.settings.dropbox.clientID === "") {
@@ -960,7 +1021,8 @@ export default class AxiomSyncPlugin extends Plugin {
    * After 202403 the data should be of profile based.
    */
   getCurrProfileID() {
-    return "s3-default-1";
+    const serviceType = this.settings?.serviceType ?? "s3";
+    return `${serviceType}-default-1`;
   }
 
   async checkIfOauthExpires() {

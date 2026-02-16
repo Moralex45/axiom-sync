@@ -6,13 +6,13 @@ ep2(localforage);
 export type LocalForage = typeof localforage;
 import { nanoid } from "nanoid";
 
-import type { SyncPlanType } from "../pro/src/sync";
+import type { SyncPlanType } from "../advanced/src/sync";
 import type { Entity, SUPPORTED_SERVICES_TYPE } from "./baseTypes";
 import { unixTimeToStr } from "./misc";
 
 const DB_VERSION_NUMBER_IN_HISTORY = [20211114, 20220108, 20220326, 20240220];
 export const DEFAULT_DB_VERSION_NUMBER: number = 20240220;
-export const DEFAULT_DB_NAME = "remotelysavedb";
+export const DEFAULT_DB_NAME = "axiomsyncdb";
 export const DEFAULT_TBL_VERSION = "schemaversion";
 export const DEFAULT_SYNC_PLANS_HISTORY = "syncplanshistory";
 export const DEFAULT_TBL_VAULT_RANDOM_ID_MAPPING = "vaultrandomidmapping";

@@ -1,7 +1,7 @@
 import cloneDeep from "lodash/cloneDeep";
 import QRCode from "qrcode";
 
-import { getShrinkedSettings as getShrinkedSettingsOnedriveFull } from "../pro/src/fsOnedriveFull";
+import { getShrinkedSettings as getShrinkedSettingsOnedriveFull } from "../advanced/src/fsOnedriveFull";
 import {
   COMMAND_URI,
   type QRExportType,
@@ -21,6 +21,7 @@ export const exportQrCodeUri = async (
   if (exportFields === "basic_and_advanced") {
     settings2 = cloneDeep(settings);
     delete settings2.s3;
+    delete settings2.telegram;
     delete settings2.dropbox;
     delete settings2.onedrive;
     delete settings2.onedrivefull;
@@ -35,6 +36,8 @@ export const exportQrCodeUri = async (
     delete settings2.pro;
   } else if (exportFields === "s3") {
     settings2 = { s3: cloneDeep(settings.s3) };
+  } else if (exportFields === "telegram") {
+    settings2 = { telegram: cloneDeep(settings.telegram) };
   } else if (exportFields === "dropbox") {
     settings2 = { dropbox: cloneDeep(settings.dropbox) };
   } else if (exportFields === "onedrive") {

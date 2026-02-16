@@ -7,6 +7,9 @@ const DEFAULT_SETTINGS: AxiomSyncPluginSettings = {
   s3: {
     s3AccessKeyID: "acc",
   } as any,
+  telegram: {
+    botToken: "bot-token",
+  } as any,
   webdav: {
     address: "addr",
   } as any,
