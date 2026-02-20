@@ -623,7 +623,6 @@ export const changeMobileStatusBar = (
 
 /**
  * https://github.com/axiom-sync/axiom-sync/issues/567
- * https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/Case-Sensitivity-in-API-2/td-p/191279
  * @param entities
  */
 export const fixEntityListCasesInplace = (entities: { keyRaw: string }[]) => {
@@ -750,7 +749,6 @@ export const getSha1 = async (x: ArrayBuffer, stringify: "base64" | "hex") => {
 
 /**
  * https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
- * https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa#invalidcharacters
  */
 export const checkValidName = (x: string) => {
   if (x === undefined || x === "") {

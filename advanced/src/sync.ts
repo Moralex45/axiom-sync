@@ -1,5 +1,3 @@
-// biome-ignore lint/suspicious/noShadowRestrictedNames: <explanation>
-import AggregateError from "aggregate-error";
 import PQueue from "p-queue";
 import XRegExp from "xregexp";
 import type {
@@ -43,6 +41,12 @@ import {
   upsertFileContentHistoryByVaultAndProfile,
 } from "./localdb";
 
+const createAggregateError = (errors: Error[], message = "Multiple errors") => {
+  const err = new Error(message) as Error & { errors: Error[] };
+  err.errors = errors;
+  return err;
+};
+
 const copyEntityAndFixTimeFormat = (
   src: Entity,
   serviceType: SUPPORTED_SERVICES_TYPE
@@ -52,7 +56,7 @@ const copyEntityAndFixTimeFormat = (
     if (result.mtimeCli === 0) {
       result.mtimeCli = undefined;
     } else {
-      if (serviceType === "s3" || serviceType === "dropbox") {
+      if (serviceType === "s3") {
         // round to second instead of millisecond
         result.mtimeCli = Math.floor(result.mtimeCli / 1000.0) * 1000;
       }
@@ -63,7 +67,7 @@ const copyEntityAndFixTimeFormat = (
     if (result.ctimeCli === 0) {
       result.ctimeCli = undefined;
     } else {
-      if (serviceType === "s3" || serviceType === "dropbox") {
+      if (serviceType === "s3") {
         // round to second instead of millisecond
         result.ctimeCli = Math.floor(result.ctimeCli / 1000.0) * 1000;
       }
@@ -74,7 +78,7 @@ const copyEntityAndFixTimeFormat = (
     if (result.mtimeSvr === 0) {
       result.mtimeSvr = undefined;
     } else {
-      if (serviceType === "s3" || serviceType === "dropbox") {
+      if (serviceType === "s3") {
         // round to second instead of millisecond
         result.mtimeSvr = Math.floor(result.mtimeSvr / 1000.0) * 1000;
       }
@@ -85,7 +89,7 @@ const copyEntityAndFixTimeFormat = (
     if (result.prevSyncTime === 0) {
       result.prevSyncTime = undefined;
     } else {
-      if (serviceType === "s3" || serviceType === "dropbox") {
+      if (serviceType === "s3") {
         // round to second instead of millisecond
         result.prevSyncTime = Math.floor(result.prevSyncTime / 1000.0) * 1000;
       }
@@ -1379,8 +1383,7 @@ const fullfillMTimeOfRemoteEntityInplace = (
   mtimeCli?: number
 ) => {
   // TODO:
-  // on 20240405, we find that dropbox's mtimeCli is not updated
-  // if the content is not updated even the time is updated...
+  // Some providers do not keep mtimeCli in sync when file content is unchanged.
   // so we do not check remote.mtimeCli for now..
   if (
     mtimeCli !== undefined &&
@@ -1874,7 +1877,7 @@ export const doActualSync = async (
             new Error("too many errors, stop the remaining tasks")
           );
         }
-        throw new AggregateError(potentialErrors);
+        throw createAggregateError(potentialErrors);
       }
     }
 

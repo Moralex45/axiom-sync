@@ -6,19 +6,11 @@
 import type {
   AzureBlobStorageConfig,
   BoxConfig,
-  GoogleDriveConfig,
   KoofrConfig,
-  OnedriveFullConfig,
   PCloudConfig,
   ProConfig,
-  YandexDiskConfig,
 } from "../advanced/src/baseTypesPro";
 import type { LangTypeAndAuto } from "./i18n";
-
-// S3-only build: keep non-S3 constants as empty values for compatibility.
-export const DROPBOX_APP_KEY = "";
-export const ONEDRIVE_CLIENT_ID = "";
-export const ONEDRIVE_AUTHORITY = "";
 
 export const DEFAULT_CONTENT_TYPE = "application/octet-stream";
 
@@ -26,14 +18,9 @@ export type SUPPORTED_SERVICES_TYPE =
   | "s3"
   | "telegram"
   | "webdav"
-  | "dropbox"
-  | "onedrive"
-  | "onedrivefull"
   | "webdis"
-  | "googledrive"
   | "box"
   | "pcloud"
-  | "yandexdisk"
   | "koofr"
   | "azureblobstorage";
 
@@ -84,18 +71,6 @@ export interface TelegramConfig {
   indexByKey: Record<string, TelegramIndexEntry>;
 }
 
-export interface DropboxConfig {
-  accessToken: string;
-  clientID: string;
-  refreshToken: string;
-  accessTokenExpiresInSeconds: number;
-  accessTokenExpiresAtTime: number;
-  accountID: string;
-  username: string;
-  credentialsShouldBeDeletedAtTime?: number;
-  remoteBaseDir?: string;
-}
-
 export type WebdavAuthType = "digest" | "basic";
 export type WebdavDepthType =
   | "auto" // deprecated on 20240116
@@ -120,21 +95,6 @@ export interface WebdavConfig {
    * @deprecated
    */
   manualRecursive: boolean; // deprecated in 0.3.6, use depth
-}
-
-export interface OnedriveConfig {
-  accessToken: string;
-  clientID: string;
-  authority: string;
-  refreshToken: string;
-  accessTokenExpiresInSeconds: number;
-  accessTokenExpiresAtTime: number;
-  deltaLink: string;
-  username: string;
-  credentialsShouldBeDeletedAtTime?: number;
-  remoteBaseDir?: string;
-  emptyFile: "skip" | "error";
-  kind: "onedrive";
 }
 
 export interface WebdisConfig {
@@ -165,14 +125,9 @@ export interface AxiomSyncPluginSettings {
   s3: S3Config;
   telegram: TelegramConfig;
   webdav: WebdavConfig;
-  dropbox: DropboxConfig;
-  onedrive: OnedriveConfig;
-  onedrivefull: OnedriveFullConfig;
   webdis: WebdisConfig;
-  googledrive: GoogleDriveConfig;
   box: BoxConfig;
   pcloud: PCloudConfig;
-  yandexdisk: YandexDiskConfig;
   koofr: KoofrConfig;
   azureblobstorage: AzureBlobStorageConfig;
 
@@ -232,8 +187,6 @@ export interface AxiomSyncPluginSettings {
 
 export const COMMAND_URI = "axiom-sync";
 export const COMMAND_CALLBACK = "axiom-sync-cb";
-export const COMMAND_CALLBACK_ONEDRIVE = "axiom-sync-cb-onedrive";
-export const COMMAND_CALLBACK_DROPBOX = "axiom-sync-cb-dropbox";
 
 export interface UriParams {
   func?: string;

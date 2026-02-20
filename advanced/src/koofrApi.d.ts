@@ -2762,64 +2762,12 @@ export interface components {
     /** @description ConfigExternal represents external cloud integration settings. */
     ConfigExternal: {
       cloudDrive: components["schemas"]["ConfigExternalCloudDrive"];
-      dropbox: components["schemas"]["ConfigExternalDropbox"];
-      googleDrive: components["schemas"]["ConfigExternalGoogleDrive"];
-      oneDrive: components["schemas"]["ConfigExternalOneDrive"];
     };
     /** @description ConfigExternalCloudDrive is deprecated. */
     ConfigExternalCloudDrive: {
       /** @description ConnectUrl is deprecated. */
       connectUrl: string;
       /** @description Enabled is deprecated. */
-      enabled: boolean;
-    };
-    /** @description ConfigExternalDropbox represents Dropbox integration settings. */
-    ConfigExternalDropbox: {
-      /**
-       * @description ConnectUrl is the URL for connecting new Dropbox places.
-       * @example /places/dropbox/connect
-       */
-      connectUrl: string;
-      /**
-       * @description Enabled defines whether Dropbox integration is enabled.
-       * @example true
-       */
-      enabled: boolean;
-      /**
-       * @description ConnectUrl is the URL for Dropbox user logout.
-       * @example https://www.dropbox.com/logout
-       */
-      logoutUrl: string;
-    };
-    /** @description ConfigExternalGoogleDrive represents Google Drive integration settings. */
-    ConfigExternalGoogleDrive: {
-      /**
-       * @description ConnectUrl is the URL for connecting new Google Drive places.
-       * @example /places/googledrive/connect
-       */
-      connectUrl: string;
-      /**
-       * @description Enabled defines whether Google Drive integration is enabled.
-       * @example true
-       */
-      enabled: boolean;
-      /**
-       * @description ConnectUrl is the URL for Google Drive user logout.
-       * @example https://accounts.google.com/Logout
-       */
-      logoutUrl: string;
-    };
-    /** @description ConfigExternalOneDrive represents OneDrive integration settings. */
-    ConfigExternalOneDrive: {
-      /**
-       * @description ConnectUrl is the URL for connecting new OneDrive places.
-       * @example /places/onedrive/connect
-       */
-      connectUrl: string;
-      /**
-       * @description Enabled defines whether OneDrive integration is enabled.
-       * @example true
-       */
       enabled: boolean;
     };
     /** @description ConfigFeatureFlags represents feature flags settings. */
@@ -3007,8 +2955,8 @@ export interface components {
        */
       appGalleryUrl?: string;
       /**
-       * @description Url is the URL of Google Play store.
-       * @example https://play.google.com/store/apps/details?id=net.koofr.app
+       * @description Url is the URL of an Android app store.
+       * @example https://example.com/android-app
        */
       url: string;
     };
@@ -3173,7 +3121,7 @@ export interface components {
       firstName: string;
       /**
        * @description HasPassword defines if user's password is set. User can be without a
-       *     password if they signed in with Google.
+       *     password if they signed in with an external identity provider.
        * @example true
        */
       hasPassword: boolean;

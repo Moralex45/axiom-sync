@@ -71,55 +71,6 @@
   padding: 8px 12px 12px 12px;
 }
 
-.dropbox-disclaimer {
-  font-weight: bold;
-}
-.dropbox-hide {
-  display: none;
-}
-
-.dropbox-auth-button-hide {
-  display: none;
-}
-
-.dropbox-revoke-auth-button-hide {
-  display: none;
-}
-
-.onedrive-disclaimer {
-  font-weight: bold;
-}
-.onedrive-hide {
-  display: none;
-}
-
-.onedrive-auth-button-hide {
-  display: none;
-}
-
-.onedrive-revoke-auth-button-hide {
-  display: none;
-}
-
-.onedrivefull-allow-to-use-hide {
-  display: none;
-}
-
-.onedrivefull-disclaimer {
-  font-weight: bold;
-}
-.onedrivefull-hide {
-  display: none;
-}
-
-.onedrivefull-auth-button-hide {
-  display: none;
-}
-
-.onedrivefull-revoke-auth-button-hide {
-  display: none;
-}
-
 .webdav-disclaimer {
   font-weight: bold;
 }
@@ -135,25 +86,6 @@
   font-weight: bold;
 }
 .webdis-hide {
-  display: none;
-}
-
-.googledrive-disclaimer {
-  font-weight: bold;
-}
-.googledrive-hide {
-  display: none;
-}
-
-.googledrive-allow-to-use-hide {
-  display: none;
-}
-
-.googledrive-auth-button-hide {
-  display: none;
-}
-
-.googledrive-revoke-auth-button-hide {
   display: none;
 }
 
@@ -192,25 +124,6 @@
 }
 
 .pcloud-revoke-auth-button-hide {
-  display: none;
-}
-
-.yandexdisk-disclaimer {
-  font-weight: bold;
-}
-.yandexdisk-hide {
-  display: none;
-}
-
-.yandexdisk-allow-to-use-hide {
-  display: none;
-}
-
-.yandexdisk-auth-button-hide {
-  display: none;
-}
-
-.yandexdisk-revoke-auth-button-hide {
   display: none;
 }
 

@@ -13,29 +13,14 @@ const DEFAULT_SETTINGS: AxiomSyncPluginSettings = {
   webdav: {
     address: "addr",
   } as any,
-  dropbox: {
-    username: "测试中文",
-  } as any,
-  onedrive: {
-    username: "test 🍎 emoji",
-  } as any,
-  onedrivefull: {
-    username: "test 🍎 emoji",
-  } as any,
   webdis: {
     address: "addr",
-  } as any,
-  googledrive: {
-    refreshToken: "xxx",
   } as any,
   box: {
     refreshToken: "xxx",
   } as any,
   pcloud: {
     accessToken: "xxx",
-  } as any,
-  yandexdisk: {
-    refreshToken: "xxx",
   } as any,
   koofr: {
     refreshToken: "xxx",

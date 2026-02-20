@@ -1,5 +1,4 @@
 // biome-ignore lint/suspicious/noShadowRestrictedNames: <explanation>
-import AggregateError from "aggregate-error";
 import cloneDeep from "lodash/cloneDeep";
 import throttle from "lodash/throttle";
 import { FileText, RefreshCcw, RotateCcw, createElement } from "lucide";
@@ -22,15 +21,10 @@ import {
 } from "../advanced/src/account";
 import { DEFAULT_AZUREBLOBSTORAGE_CONFIG } from "../advanced/src/fsAzureBlobStorage";
 import { DEFAULT_BOX_CONFIG } from "../advanced/src/fsBox";
-import { DEFAULT_GOOGLEDRIVE_CONFIG } from "../advanced/src/fsGoogleDrive";
 import { DEFAULT_KOOFR_CONFIG } from "../advanced/src/fsKoofr";
-import {
-  DEFAULT_ONEDRIVEFULL_CONFIG,
-} from "../advanced/src/fsOnedriveFull";
 import {
   DEFAULT_PCLOUD_CONFIG,
 } from "../advanced/src/fsPCloud";
-import { DEFAULT_YANDEXDISK_CONFIG } from "../advanced/src/fsYandexDisk";
 import { syncer } from "../advanced/src/sync";
 import type {
   AxiomSyncPluginSettings,
@@ -43,13 +37,9 @@ import {
 import { API_VER_ENSURE_REQURL_OK } from "./baseTypesObs";
 import { messyConfigToNormal, normalConfigToMessy } from "./configPersist";
 import { exportVaultSyncPlansToFiles } from "./debugMode";
-import { DEFAULT_DROPBOX_CONFIG } from "./fsDropbox";
 import { FakeFsEncrypt } from "./fsEncrypt";
 import { getClient } from "./fsGetter";
 import { FakeFsLocal } from "./fsLocal";
-import {
-  DEFAULT_ONEDRIVE_CONFIG,
-} from "./fsOnedrive";
 import { DEFAULT_S3_CONFIG } from "./fsS3";
 import { DEFAULT_TELEGRAM_CONFIG } from "./fsTelegram";
 import { DEFAULT_WEBDAV_CONFIG } from "./fsWebdav";
@@ -77,14 +67,9 @@ const DEFAULT_SETTINGS: AxiomSyncPluginSettings = {
   s3: DEFAULT_S3_CONFIG,
   telegram: DEFAULT_TELEGRAM_CONFIG,
   webdav: DEFAULT_WEBDAV_CONFIG,
-  dropbox: DEFAULT_DROPBOX_CONFIG,
-  onedrive: DEFAULT_ONEDRIVE_CONFIG,
-  onedrivefull: DEFAULT_ONEDRIVEFULL_CONFIG,
   webdis: DEFAULT_WEBDIS_CONFIG,
-  googledrive: DEFAULT_GOOGLEDRIVE_CONFIG,
   box: DEFAULT_BOX_CONFIG,
   pcloud: DEFAULT_PCLOUD_CONFIG,
-  yandexdisk: DEFAULT_YANDEXDISK_CONFIG,
   koofr: DEFAULT_KOOFR_CONFIG,
   azureblobstorage: DEFAULT_AZUREBLOBSTORAGE_CONFIG,
   password: "",
@@ -409,7 +394,6 @@ export default class AxiomSyncPlugin extends Plugin {
       try {
         const errs = (error as any)?.errors;
         const isAggregateLike =
-          error instanceof AggregateError ||
           Array.isArray(errs) ||
           (errs !== undefined && typeof errs?.[Symbol.iterator] === "function");
         if (isAggregateLike) {
@@ -845,33 +829,6 @@ export default class AxiomSyncPlugin extends Plugin {
       this.settings.telegram.indexByKey = {};
     }
 
-    if (this.settings.dropbox.clientID === "") {
-      this.settings.dropbox.clientID = DEFAULT_SETTINGS.dropbox.clientID;
-    }
-    if (this.settings.dropbox.remoteBaseDir === undefined) {
-      this.settings.dropbox.remoteBaseDir = "";
-    }
-
-    if (this.settings.onedrive.clientID === "") {
-      this.settings.onedrive.clientID = DEFAULT_SETTINGS.onedrive.clientID;
-    }
-    if (this.settings.onedrive.authority === "") {
-      this.settings.onedrive.authority = DEFAULT_SETTINGS.onedrive.authority;
-    }
-    if (this.settings.onedrive.remoteBaseDir === undefined) {
-      this.settings.onedrive.remoteBaseDir = "";
-    }
-    if (this.settings.onedrive.emptyFile === undefined) {
-      this.settings.onedrive.emptyFile = "skip";
-    }
-    if (this.settings.onedrive.kind === undefined) {
-      this.settings.onedrive.kind = "onedrive";
-    }
-
-    if (this.settings.onedrivefull === undefined) {
-      this.settings.onedrivefull = DEFAULT_ONEDRIVEFULL_CONFIG;
-    }
-
     if (this.settings.webdav.manualRecursive === undefined) {
       this.settings.webdav.manualRecursive = true;
     }
@@ -982,20 +939,12 @@ export default class AxiomSyncPlugin extends Plugin {
       this.settings.profiler.recordSize = false;
     }
 
-    if (this.settings.googledrive === undefined) {
-      this.settings.googledrive = DEFAULT_GOOGLEDRIVE_CONFIG;
-    }
-
     if (this.settings.box === undefined) {
       this.settings.box = DEFAULT_BOX_CONFIG;
     }
 
     if (this.settings.pcloud === undefined) {
       this.settings.pcloud = DEFAULT_PCLOUD_CONFIG;
-    }
-
-    if (this.settings.yandexdisk === undefined) {
-      this.settings.yandexdisk = DEFAULT_YANDEXDISK_CONFIG;
     }
 
     if (this.settings.koofr === undefined) {

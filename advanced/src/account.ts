@@ -275,23 +275,8 @@ export const checkProRunnableAndFixInplace = async (
     service: SUPPORTED_SERVICES_TYPE;
     name: string;
   }[] = [
-    {
-      feature: "feature-google_drive",
-      service: "googledrive",
-      name: "Google Drive",
-    },
-    {
-      feature: "feature-onedrive_full",
-      service: "onedrivefull",
-      name: "Onedrive (Full)",
-    },
     { feature: "feature-box", service: "box", name: "Box" },
     { feature: "feature-pcloud", service: "pcloud", name: "pCloud" },
-    {
-      feature: "feature-yandex_disk",
-      service: "yandexdisk",
-      name: "Yandex Disk",
-    },
     {
       feature: "feature-koofr",
       service: "koofr",

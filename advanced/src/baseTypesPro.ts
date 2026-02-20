@@ -8,11 +8,8 @@ export const PRO_WEBSITE = "";
 
 export type PRO_FEATURE_TYPE =
   | "feature-smart_conflict"
-  | "feature-onedrive_full"
-  | "feature-google_drive"
   | "feature-box"
   | "feature-pcloud"
-  | "feature-yandex_disk"
   | "feature-koofr"
   | "feature-azure_blob_storage";
 
@@ -37,24 +34,6 @@ export interface ProConfig {
 //////////////////////////////////////////////////////////
 
 export const MERGABLE_SIZE = 1000 * 1000; // 1 MB
-
-///////////////////////////////////////////////////////////
-// Google Drive
-//////////////////////////////////////////////////////////
-
-export interface GoogleDriveConfig {
-  accessToken: string;
-  accessTokenExpiresInMs: number;
-  accessTokenExpiresAtTimeMs: number;
-  refreshToken: string;
-  remoteBaseDir?: string;
-  credentialsShouldBeDeletedAtTimeMs?: number;
-  scope: "https://www.googleapis.com/auth/drive.file";
-  kind: "googledrive";
-}
-
-export const GOOGLEDRIVE_CLIENT_ID = "";
-export const GOOGLEDRIVE_CLIENT_SECRET = "";
 
 ///////////////////////////////////////////////////////////
 // box
@@ -97,25 +76,6 @@ export interface PCloudConfig {
 }
 
 ///////////////////////////////////////////////////////////
-// Yandex Disk
-//////////////////////////////////////////////////////////
-
-export const COMMAND_CALLBACK_YANDEXDISK = "axiom-sync-cb-yandexdisk";
-export const YANDEXDISK_CLIENT_ID = "";
-export const YANDEXDISK_CLIENT_SECRET = "";
-
-export interface YandexDiskConfig {
-  accessToken: string;
-  accessTokenExpiresInMs: number;
-  accessTokenExpiresAtTimeMs: number;
-  refreshToken: string;
-  remoteBaseDir?: string;
-  credentialsShouldBeDeletedAtTimeMs?: number;
-  scope: string;
-  kind: "yandexdisk";
-}
-
-///////////////////////////////////////////////////////////
 // Koofr
 //////////////////////////////////////////////////////////
 
@@ -147,25 +107,4 @@ export interface AzureBlobStorageConfig {
   generateFolderObject: boolean;
   partsConcurrency: number;
   kind: "azureblobstorage";
-}
-
-///////////////////////////////////////////////////////////
-// Onedrive (Full)
-//////////////////////////////////////////////////////////
-
-export const COMMAND_CALLBACK_ONEDRIVEFULL = "axiom-sync-cb-onedrivefull";
-
-export interface OnedriveFullConfig {
-  accessToken: string;
-  clientID: string;
-  authority: string;
-  refreshToken: string;
-  accessTokenExpiresInSeconds: number;
-  accessTokenExpiresAtTime: number;
-  deltaLink: string;
-  username: string;
-  credentialsShouldBeDeletedAtTime?: number;
-  remoteBaseDir?: string;
-  emptyFile: "skip" | "error";
-  kind: "onedrivefull";
 }

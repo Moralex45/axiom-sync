@@ -22,8 +22,6 @@ import {
 import { requestTimeout } from "@smithy/fetch-http-handler/dist-es/request-timeout";
 import { type HttpRequest, HttpResponse } from "@smithy/protocol-http";
 import { buildQueryString } from "@smithy/querystring-builder";
-// biome-ignore lint/suspicious/noShadowRestrictedNames: <explanation>
-import AggregateError from "aggregate-error";
 import * as mime from "mime-types";
 import { Platform, type RequestUrlParam, requestUrl } from "obsidian";
 import PQueue from "p-queue";
@@ -33,6 +31,12 @@ import { bufferToArrayBuffer, getFolderLevels } from "./misc";
 
 import type { Entity } from "./baseTypes";
 import { FakeFs } from "./fsAll";
+
+const createAggregateError = (errors: Error[], message = "Multiple errors") => {
+  const err = new Error(message) as Error & { errors: Error[] };
+  err.errors = errors;
+  return err;
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // special handler using Obsidian requestUrl
@@ -840,7 +844,7 @@ export class FakeFsS3 extends FakeFs {
       console.debug(err);
       if (callbackFunc !== undefined) {
         if (this.s3Config.s3Endpoint.contains(this.s3Config.s3BucketName)) {
-          const err2 = new AggregateError([
+          const err2 = createAggregateError([
             err,
             new Error(
               "Maybe you've included the bucket name inside the endpoint setting. Please remove the bucket name and try again."
