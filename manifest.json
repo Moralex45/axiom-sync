@@ -6,6 +6,6 @@
   "description": "Yet another unofficial plugin allowing users to synchronize notes between local device and the cloud service.",
   "author": "fyears",
   "authorUrl": "https://github.com/fyears",
-  "isDesktopOnly": false,
+  "isDesktopOnly": true,
   "fundingUrl": "https://axiom-sync.com"
 }

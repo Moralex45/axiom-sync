@@ -668,7 +668,7 @@ export default class AxiomSyncPlugin extends Plugin {
     }
 
     this.addCommand({
-      id: "start-sync",
+      id: "axiom-sync:start-sync",
       name: t("command_startsync"),
       icon: iconNameSyncWait,
       callback: async () => {
@@ -677,7 +677,7 @@ export default class AxiomSyncPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "start-sync-dry-run",
+      id: "axiom-sync:start-sync-dry-run",
       name: t("command_drynrun"),
       icon: iconNameSyncWait,
       callback: async () => {
@@ -686,7 +686,7 @@ export default class AxiomSyncPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "export-sync-plans-1-only-change",
+      id: "axiom-sync:export-sync-plans-1-only-change",
       name: t("command_exportsyncplans_1_only_change"),
       icon: iconNameLogs,
       callback: async () => {
@@ -702,7 +702,7 @@ export default class AxiomSyncPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "export-sync-plans-1",
+      id: "axiom-sync:export-sync-plans-1",
       name: t("command_exportsyncplans_1"),
       icon: iconNameLogs,
       callback: async () => {
@@ -718,7 +718,7 @@ export default class AxiomSyncPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "export-sync-plans-5",
+      id: "axiom-sync:export-sync-plans-5",
       name: t("command_exportsyncplans_5"),
       icon: iconNameLogs,
       callback: async () => {
@@ -734,7 +734,7 @@ export default class AxiomSyncPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "export-sync-plans-all",
+      id: "axiom-sync:export-sync-plans-all",
       name: t("command_exportsyncplans_all"),
       icon: iconNameLogs,
       callback: async () => {
