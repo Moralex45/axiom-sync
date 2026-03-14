@@ -1,6 +1,6 @@
 # Axiom Sync
 
-> Sync Obsidian vaults with S3-compatible storage or Telegram.
+> Sync vaults with S3-compatible storage or Telegram.
 > Built for people who want control, transparency, and provider freedom.
 
 Author: `aamorozovv`

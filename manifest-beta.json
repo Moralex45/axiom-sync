@@ -3,7 +3,7 @@
   "name": "Axiom Sync",
   "version": "0.5.25",
   "minAppVersion": "0.13.21",
-  "description": "Sync Obsidian vaults with S3-compatible storage or Telegram.",
+  "description": "Sync vaults with S3-compatible storage or Telegram.",
   "author": "aamorozovv",
   "authorUrl": "https://github.com/Moralex45",
   "isDesktopOnly": true,
