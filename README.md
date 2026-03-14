@@ -1,69 +1,52 @@
-# AXIOM SYNC
+# Axiom Sync
 
-> High-reliability vault synchronization for Obsidian.
+> Sync Obsidian vaults with S3-compatible storage or Telegram.
 > Built for people who want control, transparency, and provider freedom.
 
-Author: Aleksandr Morozov
+Author: `aamorozovv`
 
----
+## Features
 
-## Why Axiom Sync
-
-Axiom Sync is a sync engine for Obsidian vaults that keeps your notes portable across storage providers.
-You choose where data lives. You choose how it is protected.
-
-- Local-first workflow with remote replication
-- Multi-provider architecture (no hard lock-in)
-- Safety-first sync controls (dry-run, conflict handling, explicit settings)
-- Optional encryption layer for data at rest on remote
-
----
-
-## Capability Matrix
-
-### Core Providers
-
-- S3-compatible endpoints
-- Telegram Bot storage (experimental)
-
-### Sync Controls
-
+- S3-compatible sync target
+- Telegram Bot storage target (experimental)
 - Manual sync
-- Dry-run mode
 - Scheduled sync
-- Conflict action configuration
-- Encryption method selection
+- Sync on save
+- Dry-run support
+- Path allow/ignore filters
+- Optional encryption for remote data
+- Import/export of settings
 
----
+## Compatibility
 
-## Security + Privacy
+- Desktop only
 
-- The plugin uses network access only to communicate with the provider(s) you configure.
-- File content and metadata are sent only to your selected remote backend.
-- OAuth tokens and provider credentials are stored in local Obsidian plugin data.
-- No built-in telemetry or analytics tracking.
+## Security and privacy
 
----
+- Network access is used only for the remote service you configure.
+- Vault content and metadata are sent only to the configured remote backend.
+- Provider credentials are stored in local Obsidian plugin data.
+- The plugin does not include built-in client-side telemetry or analytics.
 
-## Official Submission Disclosures
+## Community plugin disclosures
 
-### Internet Access
+### Internet access
 
-Required for synchronization with remote services.
+Required for synchronization and connectivity checks against configured remote services.
 
-### External Services
+### External services
 
-Connections are made only to user-configured S3-compatible endpoints or Telegram Bot API.
+- User-configured S3-compatible endpoints
+- Telegram Bot API
+- [axiom-sync.com](https://axiom-sync.com) only if the user chooses paid account-based features
 
-### Commercial / Pro Features
+### Accounts and payments
 
-- Core features are available without payment.
-- Some Pro capabilities require a paid account at [axiom-sync.com](https://axiom-sync.com).
-- This project is independent and not affiliated with Obsidian.
+- Core sync features are available without payment and without an account.
+- Some optional Pro features may require an account and payment at [axiom-sync.com](https://axiom-sync.com).
+- This project is independent and is not affiliated with Obsidian.
 
----
-
-## Quick Start (Manual Install)
+## Manual install
 
 1. Build the plugin:
 
@@ -71,45 +54,27 @@ Connections are made only to user-configured S3-compatible endpoints or Telegram
 npm run build2
 ```
 
-2. Copy build artifacts into:
-
-```text
-<Vault>/.obsidian/plugins/axiom-sync/
-```
-
-Required files:
+2. Copy these files into `<Vault>/.obsidian/plugins/axiom-sync/`:
 
 - `main.js`
 - `manifest.json`
 - `styles.css`
 
-3. In Obsidian, reload community plugins:
-
-```text
-Settings -> Community plugins -> Reload plugins
-```
+3. In Obsidian, go to `Settings -> Community plugins -> Reload plugins`.
 
 4. Enable `Axiom Sync`.
 
----
+## Manual update
 
-## Manual Update
-
-1. Rebuild:
+1. Rebuild the plugin:
 
 ```bash
 npm run build2
 ```
 
-2. Replace `main.js`, `manifest.json`, and `styles.css` in:
+2. Replace `main.js`, `manifest.json`, and `styles.css` in `<Vault>/.obsidian/plugins/axiom-sync/`.
 
-```text
-<Vault>/.obsidian/plugins/axiom-sync/
-```
-
-3. Reload plugins (or restart Obsidian).
-
----
+3. Reload plugins or restart Obsidian.
 
 ## Development
 
@@ -118,7 +83,7 @@ npm install
 npm run dev2
 ```
 
-Build + type-check:
+Build and type-check:
 
 ```bash
 npm run build2
@@ -130,10 +95,6 @@ Run tests:
 npm test
 ```
 
----
+## Design intent
 
-## Design Intent
-
-This project is designed around one principle:
-
-**Your notes stay yours. Axiom Sync should be a transport layer, not a walled garden.**
+Your notes stay yours. Axiom Sync is meant to be a transport layer, not a walled garden.
