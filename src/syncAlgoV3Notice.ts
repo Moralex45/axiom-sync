@@ -1,5 +1,6 @@
 import { type App, Modal } from "obsidian";
 import type { TransItemType } from "./i18n";
+import { logInfo } from "./log";
 import type AxiomSyncPlugin from "./main"; // unavoidable
 
 import { stringToFragment } from "./misc";
@@ -143,13 +144,13 @@ export class SyncAlgoV3Modal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     if (this.agree) {
-      console.info("agree to use the new algorithm");
+      logInfo("agree to use the new algorithm");
       this.plugin.saveAgreeToUseNewSyncAlgorithm();
       this.plugin.enableAutoSyncIfSet();
       this.plugin.enableInitSyncIfSet();
       this.plugin.toggleSyncOnSaveIfSet();
     } else {
-      console.info("do not agree to use the new algorithm");
+      logInfo("do not agree to use the new algorithm");
       this.plugin.unload();
     }
   }

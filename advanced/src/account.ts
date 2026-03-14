@@ -13,9 +13,10 @@ import {
   type ProConfig,
 } from "./baseTypesPro";
 import { codeVerifier2CodeChallenge } from "./oauth2";
+import { logDebug, logInfo } from "../../src/log";
 
 const site = PRO_WEBSITE;
-console.debug(`axiom-sync official website: ${site}`);
+logDebug(`axiom-sync official website: ${site}`);
 
 export const DEFAULT_PRO_CONFIG: ProConfig = {
   accessToken: "",
@@ -76,7 +77,7 @@ export const sendAuthReq = async (
 export const sendRefreshTokenReq = async (refreshToken: string) => {
   const appKey = PRO_CLIENT_ID ?? "cli-"; // hard-code
   try {
-    console.info("start auto getting refreshed Axiom Sync access token.");
+    logInfo("start auto getting refreshed Axiom Sync access token.");
     const resp1 = await fetch(`${site}/api/v1/oauth2/token`, {
       method: "POST",
       body: new URLSearchParams({
@@ -87,7 +88,7 @@ export const sendRefreshTokenReq = async (refreshToken: string) => {
       }),
     });
     const resp2: AuthResError | AuthResSucc = await resp1.json();
-    console.info("finish auto getting refreshed Axiom Sync access token.");
+    logInfo("finish auto getting refreshed Axiom Sync access token.");
     return resp2;
   } catch (e) {
     console.error(e);
@@ -129,7 +130,7 @@ export const setConfigBySuccessfullAuthInplace = async (
 
   await saveUpdatedConfigFunc?.();
 
-  console.info(
+  logInfo(
     "finish updating local info of Axiom Sync official website token"
   );
 };
@@ -148,7 +149,7 @@ export const getAccessToken = async (
     return config.accessToken;
   }
 
-  console.debug(
+  logDebug(
     `currently, accessToken=${config.accessToken}, accessTokenExpiresAtTimeMs=${
       config.accessTokenExpiresAtTimeMs
     }, credentialsShouldBeDeletedAtTimeMs=${
@@ -223,7 +224,7 @@ export const checkProRunnableAndFixInplace = async (
   pluginVersion: string,
   saveUpdatedConfigFunc: () => Promise<any> | undefined
 ): Promise<true> => {
-  console.debug(`checkProRunnableAndFixInplace`);
+  logDebug(`checkProRunnableAndFixInplace`);
 
   // many checks if status is valid
 
@@ -239,7 +240,7 @@ export const checkProRunnableAndFixInplace = async (
     const tooFarInTheFuture = f.expireAtTimeMs >= Date.now() + msIn40Days;
     const alreadyExpired = f.expireAtTimeMs <= Date.now();
     if (tooFarInTheFuture || alreadyExpired) {
-      console.info(
+      logInfo(
         `the pro feature is too far in the future and has expired, check again.`
       );
       await getAndSaveProFeatures(
@@ -290,7 +291,7 @@ export const checkProRunnableAndFixInplace = async (
   ];
 
   for (const { feature, service, name } of toChecked) {
-    console.debug(`checking "${feature}", serviceType=${config.serviceType}`);
+    logDebug(`checking "${feature}", serviceType=${config.serviceType}`);
     if (config.serviceType === service) {
       if (
         config.pro.enabledProFeatures.filter((x) => x.featureName === feature)

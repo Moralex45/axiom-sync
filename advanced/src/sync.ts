@@ -32,6 +32,7 @@ import {
   roughSizeOfObject,
   unixTimeToStr,
 } from "../../src/misc";
+import { logDebug, logInfo } from "../../src/log";
 import type { Profiler } from "../../src/profiler";
 import { checkProRunnableAndFixInplace } from "./account";
 import { isMergable, mergeFile, tryDuplicateFile } from "./conflictLogic";
@@ -352,7 +353,7 @@ export const getSkipItemsByList = (
       result.push(key);
     }
   }
-  console.debug(`finalIsIgnored list= ${JSON.stringify(result)}`);
+  logDebug(`finalIsIgnored list= ${JSON.stringify(result)}`);
   return result;
 };
 
@@ -1730,7 +1731,7 @@ export const doActualSync = async (
 ) => {
   profiler?.addIndent();
   profiler?.insert("doActualSync: enter");
-  console.debug(`concurrency === ${concurrency}`);
+  logDebug(`concurrency === ${concurrency}`);
   const {
     onlyMarkSyncedOps,
     folderCreationOps,
@@ -1744,9 +1745,9 @@ export const doActualSync = async (
   // console.debug(`folderCreationOps: ${JSON.stringify(folderCreationOps)}`);
   // console.debug(`deletionOps: ${JSON.stringify(deletionOps)}`);
   // console.debug(`uploadDownloads: ${JSON.stringify(uploadDownloads)}`);
-  console.debug(`allFilesCount: ${allFilesCount}`);
-  console.debug(`realModifyDeleteCount: ${realModifyDeleteCount}`);
-  console.debug(`realTotalCount: ${realTotalCount}`);
+  logDebug(`allFilesCount: ${allFilesCount}`);
+  logDebug(`realModifyDeleteCount: ${realModifyDeleteCount}`);
+  logDebug(`realTotalCount: ${realTotalCount}`);
   profiler?.insert("doActualSync: finish splitting steps");
 
   profiler?.insertSize(
@@ -1759,7 +1760,7 @@ export const doActualSync = async (
   );
   profiler?.insertSize("doActualSync: sizeof realTotalCount", deletionOps);
 
-  console.debug(`protectModifyPercentage: ${protectModifyPercentage}`);
+  logDebug(`protectModifyPercentage: ${protectModifyPercentage}`);
 
   if (
     protectModifyPercentage >= 0 &&
@@ -1805,7 +1806,7 @@ export const doActualSync = async (
   for (let i = 0; i < nested.length; ++i) {
     profiler?.addIndent();
     profiler?.insert(`doActualSync: step ${i} start`);
-    console.debug(logTexts[i]);
+    logDebug(logTexts[i]);
 
     const operations = nested[i];
     // console.debug(`curr operations=${JSON.stringify(operations, null, 2)}`);
@@ -1937,7 +1938,7 @@ export async function syncer(
   ) => any,
   callbackSyncProcess?: any
 ) {
-  console.info(`starting sync.`);
+  logInfo(`starting sync.`);
   markIsSyncingFunc(true);
 
   let everythingOk = true;
@@ -2033,8 +2034,8 @@ export async function syncer(
       triggerSource,
       configDir
     );
-    console.debug(`mixedEntityMappings:`);
-    console.debug(mixedEntityMappings); // for debugging
+    logDebug(`mixedEntityMappings:`);
+    logDebug(mixedEntityMappings);
     profiler?.insert("finish building full sync plan");
 
     await insertSyncPlanRecordByVault(
@@ -2110,6 +2111,6 @@ export async function syncer(
   await ribboonFunc?.(triggerSource, step);
   await statusBarFunc?.(triggerSource, step, everythingOk);
 
-  console.info(`ending sync.`);
+  logInfo(`ending sync.`);
   markIsSyncingFunc(false);
 }

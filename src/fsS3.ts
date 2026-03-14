@@ -28,6 +28,7 @@ import PQueue from "p-queue";
 import { DEFAULT_CONTENT_TYPE, type S3Config } from "./baseTypes";
 import { VALID_REQURL } from "./baseTypesObs";
 import { bufferToArrayBuffer, getFolderLevels } from "./misc";
+import { logDebug } from "./log";
 
 import type { Entity } from "./baseTypes";
 import { FakeFs } from "./fsAll";
@@ -841,7 +842,7 @@ export class FakeFsS3 extends FakeFs {
         throw Error(`not 200 httpStatusCode`);
       }
     } catch (err: any) {
-      console.debug(err);
+      logDebug(err);
       if (callbackFunc !== undefined) {
         if (this.s3Config.s3Endpoint.contains(this.s3Config.s3BucketName)) {
           const err2 = createAggregateError([

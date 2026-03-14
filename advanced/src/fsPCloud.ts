@@ -13,6 +13,7 @@ import {
   PCLOUD_CLIENT_SECRET,
   type PCloudConfig,
 } from "./baseTypesPro";
+import { logDebug, logInfo } from "../../src/log";
 
 export const DEFAULT_PCLOUD_CONFIG: PCloudConfig = {
   accessToken: "",
@@ -114,7 +115,7 @@ export const setConfigBySuccessfullAuthInplace = async (
 
   await saveUpdatedConfigFunc?.();
 
-  console.info("finish updating local info of pCloud token");
+  logInfo("finish updating local info of pCloud token");
 };
 
 interface PCloudEntity extends Entity {
@@ -603,7 +604,7 @@ export class FakeFsPCloud extends FakeFs {
     try {
       await this._init();
     } catch (err) {
-      console.debug(err);
+      logDebug(err);
       callbackFunc?.(err);
       return false;
     }

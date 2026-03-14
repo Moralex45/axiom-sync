@@ -58,6 +58,7 @@ import {
   upsertLastSuccessSyncTimeByVault,
   upsertPluginVersionByVault,
 } from "./localdb";
+import { configureLogging, logDebug, logInfo } from "./log";
 import { changeMobileStatusBar } from "./misc";
 import { DEFAULT_PROFILER_CONFIG, Profiler } from "./profiler";
 import { AxiomSyncSettingTab } from "./settings";
@@ -524,10 +525,6 @@ export default class AxiomSyncPlugin extends Plugin {
   }
 
   async onload() {
-    console.info(`loading plugin ${this.manifest.id}`);
-    // Make Obsidian requestUrl accessible to adapters instantiated outside this module.
-    (globalThis as any).__axiomSyncRequestUrl = requestUrl;
-
     const { iconSvgSyncWait, iconSvgSyncRunning, iconSvgLogs } = getIconSvg();
 
     addIcon(iconNameSyncWait, iconSvgSyncWait);
@@ -549,6 +546,11 @@ export default class AxiomSyncPlugin extends Plugin {
     this.syncEvent = new Events();
 
     await this.loadSettings();
+    configureLogging(this.settings.currLogLevel);
+    logInfo(`loading plugin ${this.manifest.id}`);
+
+    // Make Obsidian requestUrl accessible to adapters instantiated outside this module.
+    (globalThis as any).__axiomSyncRequestUrl = requestUrl;
 
     // MUST after loadSettings and before prepareDB
     const profileID: string = this.getCurrProfileID();
@@ -775,7 +777,7 @@ export default class AxiomSyncPlugin extends Plugin {
   }
 
   async onunload() {
-    console.info(`unloading plugin ${this.manifest.id}`);
+    logInfo(`unloading plugin ${this.manifest.id}`);
     this.syncRibbon = undefined;
     if (this.appContainerObserver !== undefined) {
       this.appContainerObserver.disconnect();
@@ -987,7 +989,7 @@ export default class AxiomSyncPlugin extends Plugin {
         // a real string was assigned before
         vaultRandomID = this.settings.vaultRandomID;
       }
-      console.debug("vaultRandomID is no longer saved in data.json");
+      logDebug("vaultRandomID is no longer saved in data.json");
       delete this.settings.vaultRandomID;
       await this.saveSettings();
     }
@@ -1060,11 +1062,11 @@ export default class AxiomSyncPlugin extends Plugin {
   }
 
   async _checkCurrFileModified(caller: "SYNC" | "FILE_CHANGES") {
-    console.debug(`inside checkCurrFileModified`);
+    logDebug(`inside checkCurrFileModified`);
     const currentFile = this.app.workspace.getActiveFile();
 
     if (currentFile) {
-      console.debug(`we have currentFile=${currentFile.path}`);
+      logDebug(`we have currentFile=${currentFile.path}`);
       // get the last modified time of the current file
       // if it has modified after lastSuccessSync
       // then schedule a run for syncOnSaveAfterMilliseconds after it was modified
@@ -1074,7 +1076,7 @@ export default class AxiomSyncPlugin extends Plugin {
         this.vaultRandomID
       );
 
-      console.debug(
+      logDebug(
         `lastModified=${lastModified}, lastSuccessSyncMillis=${lastSuccessSyncMillis}`
       );
 
@@ -1083,10 +1085,10 @@ export default class AxiomSyncPlugin extends Plugin {
         (caller === "FILE_CHANGES" &&
           lastModified > (lastSuccessSyncMillis ?? 1))
       ) {
-        console.debug(
+        logDebug(
           `so lastModified > lastSuccessSyncMillis or it's called while syncing before`
         );
-        console.debug(
+        logDebug(
           `caller=${caller}, isSyncing=${this.isSyncing}, hasPendingSyncOnSave=${this.hasPendingSyncOnSave}`
         );
         if (this.isSyncing) {
@@ -1102,7 +1104,7 @@ export default class AxiomSyncPlugin extends Plugin {
         }
       }
     } else {
-      console.debug(`no currentFile here`);
+      logDebug(`no currentFile here`);
     }
   }
 

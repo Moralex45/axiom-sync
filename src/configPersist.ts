@@ -2,6 +2,7 @@ import { base64url } from "rfc4648";
 import { reverseString } from "./misc";
 
 import type { AxiomSyncPluginSettings } from "./baseTypes";
+import { logDebug } from "./log";
 
 const DEFAULT_README: string =
   "The file contains sensitive info, so DO NOT take screenshot of, copy, or share it to anyone! It's also generated automatically, so do not edit it manually.";
@@ -20,7 +21,7 @@ export const messyConfigToNormal = (
   // console.debug("loading, original config on disk:");
   // console.debug(x);
   if (x === null || x === undefined) {
-    console.debug("the messy config is null or undefined, skip");
+    logDebug("the messy config is null or undefined, skip");
     return x as any;
   }
   if ("readme" in x && "d" in x) {
@@ -50,7 +51,7 @@ export const normalConfigToMessy = (
   x: AxiomSyncPluginSettings | null | undefined
 ) => {
   if (x === null || x === undefined) {
-    console.debug("the normal config is null or undefined, skip");
+    logDebug("the normal config is null or undefined, skip");
     return x;
   }
   const y = {

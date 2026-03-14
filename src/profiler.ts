@@ -1,5 +1,6 @@
 import type { ProfilerConfig, SUPPORTED_SERVICES_TYPE } from "./baseTypes";
 import { type InternalDBs, insertProfilerResultByVault } from "./localdb";
+import { logDebug } from "./log";
 import { roughSizeOfObject, unixTimeToStr } from "./misc";
 
 interface BreakPoint {
@@ -37,7 +38,7 @@ export class Profiler {
       };
       this.breakPoints.push(p);
       if (this.enablePrinting) {
-        console.debug(this.toString(-1));
+        logDebug(this.toString(-1));
       }
     }
   }
@@ -53,7 +54,7 @@ export class Profiler {
     };
     this.breakPoints.push(p);
     if (this.enablePrinting) {
-      console.debug(this.toString(-1));
+      logDebug(this.toString(-1));
     }
 
     return this;
@@ -74,7 +75,7 @@ export class Profiler {
     };
     this.breakPoints.push(p);
     if (this.enablePrinting) {
-      console.debug(this.toString(-1));
+      logDebug(this.toString(-1));
     }
 
     return this;

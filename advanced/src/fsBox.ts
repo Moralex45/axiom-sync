@@ -26,6 +26,7 @@ import {
   splitFileSizeToChunkRanges,
   unixTimeToStr,
 } from "../../src/misc";
+import { logDebug, logInfo } from "../../src/log";
 
 export const DEFAULT_BOX_CONFIG: BoxConfig = {
   accessToken: "",
@@ -82,7 +83,7 @@ export const sendAuthReq = async (authCode: string, errorCallBack: any) => {
  * https://developer.box.com/guides/authentication/tokens/refresh/
  */
 export const sendRefreshTokenReq = async (refreshToken: string) => {
-  console.debug(`refreshing token`);
+  logDebug(`refreshing token`);
   const x = await fetch("https://api.box.com/oauth2/token", {
     method: "POST",
     headers: {
@@ -98,7 +99,7 @@ export const sendRefreshTokenReq = async (refreshToken: string) => {
 
   if (x.status === 200) {
     const y = await x.json();
-    console.debug(`new token obtained`);
+    logDebug(`new token obtained`);
     return y;
   } else {
     throw Error(`cannot refresh an access token`);
@@ -128,7 +129,7 @@ export const setConfigBySuccessfullAuthInplace = async (
 
   await saveUpdatedConfigFunc?.();
 
-  console.info("finish updating local info of Box token");
+  logInfo("finish updating local info of Box token");
 };
 
 interface CreateUploadSessionRawResponse {
@@ -407,7 +408,7 @@ export class FakeFsBox extends FakeFs {
     this.boxConfig.refreshToken =
       k.refresh_token || this.boxConfig.refreshToken;
     await this.saveUpdatedConfigFunc();
-    console.info("Box accessToken updated");
+    logInfo("Box accessToken updated");
     return this.boxConfig.accessToken;
   }
 
@@ -893,7 +894,7 @@ export class FakeFsBox extends FakeFs {
     try {
       await this._init();
     } catch (err) {
-      console.debug(err);
+      logDebug(err);
       callbackFunc?.(err);
       return false;
     }

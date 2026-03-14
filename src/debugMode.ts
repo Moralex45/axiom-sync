@@ -11,6 +11,7 @@ import {
   readAllSyncPlanRecordTextsByVault,
 } from "./localdb";
 import type { InternalDBs } from "./localdb";
+import { logInfo } from "./log";
 import { mkdirpInVault } from "./misc";
 
 const getSubsetOfSyncPlan = (x: string, onlyChange: boolean) => {
@@ -36,7 +37,7 @@ export const exportVaultSyncPlansToFiles = async (
   howMany: number,
   onlyChange: boolean
 ) => {
-  console.info("exporting sync plans");
+  logInfo("exporting sync plans");
   await mkdirpInVault(DEFAULT_DEBUG_FOLDER, vault);
   const records = await readAllSyncPlanRecordTextsByVault(db, vaultRandomID);
   let md = "";
@@ -67,7 +68,7 @@ export const exportVaultSyncPlansToFiles = async (
   await vault.create(filePath, md, {
     mtime: ts,
   });
-  console.info("finish exporting sync plans");
+  logInfo("finish exporting sync plans");
 };
 
 export const exportVaultProfilerResultsToFiles = async (
@@ -75,7 +76,7 @@ export const exportVaultProfilerResultsToFiles = async (
   vault: Vault,
   vaultRandomID: string
 ) => {
-  console.info("exporting profiler results");
+  logInfo("exporting profiler results");
   await mkdirpInVault(DEFAULT_DEBUG_FOLDER, vault);
   const records = await readAllProfilerResultsByVault(db, vaultRandomID);
   let md = "";
@@ -91,5 +92,5 @@ export const exportVaultProfilerResultsToFiles = async (
   await vault.create(filePath, md, {
     mtime: ts,
   });
-  console.info("finish exporting profiler results");
+  logInfo("finish exporting profiler results");
 };

@@ -12,6 +12,7 @@ import {
 import type { Entity } from "../../src/baseTypes";
 import { copyFile } from "../../src/copyLogic";
 import type { FakeFs } from "../../src/fsAll";
+import { logDebug } from "../../src/log";
 import { MERGABLE_SIZE } from "./baseTypesPro";
 
 export function isMergable(a: Entity, b?: Entity) {
@@ -242,7 +243,7 @@ async function tryDuplicateFileForSameSizes(
   uploadCallback: (entity: Entity | undefined) => Promise<any>,
   downloadCallback: (entity: Entity | undefined) => Promise<any>
 ) {
-  console.debug(`tryDuplicateFileForSameSizes: ${key}`);
+  logDebug(`tryDuplicateFileForSameSizes: ${key}`);
 
   // 1. download
   const remoteContent = await fsRemote.readFile(key);
@@ -254,7 +255,7 @@ async function tryDuplicateFileForSameSizes(
   if (eq) {
     // 3. if the same, update local but not upload
     // read meta of remote, as if we have downloaded the file
-    console.debug(`tryDuplicateFileForSameSizes: ${key} content equal`);
+    logDebug(`tryDuplicateFileForSameSizes: ${key} content equal`);
     const entityRemote = await fsRemote.stat(key);
 
     // write
@@ -269,7 +270,7 @@ async function tryDuplicateFileForSameSizes(
     // no uploadCallback here
   } else {
     // 4. if not the same, rename local and save remote
-    console.debug(`tryDuplicateFileForSameSizes: ${key} content not equal`);
+    logDebug(`tryDuplicateFileForSameSizes: ${key} content not equal`);
 
     await fsLocal.rename(key, key2);
 
@@ -305,7 +306,7 @@ async function tryDuplicateFileForDiffSizes(
   uploadCallback: (entity: Entity | undefined) => Promise<any>,
   downloadCallback: (entity: Entity | undefined) => Promise<any>
 ) {
-  console.debug(`tryDuplicateFileForDiffSizes: ${key}`);
+  logDebug(`tryDuplicateFileForDiffSizes: ${key}`);
 
   await fsLocal.rename(key, key2);
 
@@ -350,12 +351,12 @@ export async function tryDuplicateFile(
       if (s === null || s === undefined) {
         throw Error(`not exist $${key2}`);
       }
-      console.debug(`key2=${key2} exists, cannot use for new file`);
+      logDebug(`key2=${key2} exists, cannot use for new file`);
       key2 = getFileRenameForDup(key2);
-      console.debug(`key2=${key2} is prepared for next try`);
+      logDebug(`key2=${key2} is prepared for next try`);
     } catch (e) {
       // not exists, exactly what we want
-      console.debug(`key2=${key2} doesn't exist, usable for new file`);
+      logDebug(`key2=${key2} doesn't exist, usable for new file`);
       usable = true;
     }
   } while (!usable);

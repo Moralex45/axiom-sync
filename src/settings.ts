@@ -44,6 +44,7 @@ import {
   upsertLastFailedSyncTimeByVault,
   upsertLastSuccessSyncTimeByVault,
 } from "./localdb";
+import { configureLogging, logInfo } from "./log";
 import type AxiomSyncPlugin from "./main"; // unavoidable
 import {
   changeMobileStatusBar,
@@ -1111,7 +1112,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
               realVal > 0
             ) {
               const intervalID = window.setInterval(() => {
-                console.info("auto run from settings.ts");
+                logInfo("auto run from settings.ts");
                 this.plugin.syncRun("auto");
               }, realVal);
               this.plugin.autoRunIntervalID = intervalID;
@@ -1662,8 +1663,8 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.currLogLevel ?? "info")
           .onChange(async (val: string) => {
             this.plugin.settings.currLogLevel = val;
+            configureLogging(val);
             await this.plugin.saveSettings();
-            console.info(`the log level is changed to ${val}`);
           });
       });
 

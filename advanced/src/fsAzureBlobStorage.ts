@@ -5,6 +5,7 @@ import {
 } from "@azure/storage-blob";
 import type { Entity } from "../../src/baseTypes";
 import { FakeFs } from "../../src/fsAll";
+import { logDebug } from "../../src/log";
 import { arrayBufferToHex, getFolderLevels } from "../../src/misc";
 import type { AzureBlobStorageConfig } from "./baseTypesPro";
 
@@ -243,7 +244,7 @@ export class FakeFsAzureBlobStorage extends FakeFs {
     };
 
     if (key.endsWith("/")) {
-      console.debug(`yeah we have folder upload`);
+      logDebug(`yeah we have folder upload`);
       const generateFolderObject = this.config.generateFolderObject ?? false;
       if (!generateFolderObject) {
         throw Error(
@@ -259,8 +260,8 @@ export class FakeFsAzureBlobStorage extends FakeFs {
     });
 
     if (key.endsWith("/")) {
-      console.debug(`yeah we have folder upload`);
-      console.debug(uploadResult);
+      logDebug(`yeah we have folder upload`);
+      logDebug(uploadResult);
     }
 
     if (uploadResult._response.status >= 300) {
@@ -315,7 +316,7 @@ export class FakeFsAzureBlobStorage extends FakeFs {
     try {
       await this.walkPartial();
     } catch (err) {
-      console.debug(err);
+      logDebug(err);
       callbackFunc?.(err);
       return false;
     }

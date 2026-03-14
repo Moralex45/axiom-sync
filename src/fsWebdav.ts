@@ -15,6 +15,7 @@ import type {
 import type { Entity, WebdavConfig } from "./baseTypes";
 import { VALID_REQURL } from "./baseTypesObs";
 import { FakeFs } from "./fsAll";
+import { logDebug, logInfo } from "./log";
 import { bufferToArrayBuffer, delay, splitFileSizeToChunkRanges } from "./misc";
 
 /**
@@ -83,7 +84,7 @@ if (VALID_REQURL) {
         // some webdav servers have some mysterious behaviours,
         // if a folder doesn't exist without slash, the servers return 401 instead of 404
         // here is a dirty hack that works
-        console.debug(`so we have 401, try appending request url with slash`);
+        logDebug(`so we have 401, try appending request url with slash`);
         p.url = `${options.url}/`;
         r = await requestUrl(p);
       }
@@ -312,7 +313,7 @@ export class FakeFsWebdav extends FakeFs {
             : AuthType.Password,
       });
     } else {
-      console.info("no password");
+      logInfo("no password");
       this.client = createClient(this.webdavConfig.address, {
         headers: headers,
       });
@@ -327,9 +328,9 @@ export class FakeFsWebdav extends FakeFs {
         // console.info("remote vault folder exits!");
         this.vaultFolderExists = true;
       } else {
-        console.info("remote vault folder not exists, creating");
+        logInfo("remote vault folder not exists, creating");
         await this.client.createDirectory(`/${this.remoteBaseDir}/`);
-        console.info("remote vault folder created!");
+        logInfo("remote vault folder created!");
         this.vaultFolderExists = true;
       }
     }
@@ -345,7 +346,7 @@ export class FakeFsWebdav extends FakeFs {
       this.webdavConfig.manualRecursive = true;
       if (this.saveUpdatedConfigFunc !== undefined) {
         await this.saveUpdatedConfigFunc();
-        console.info(
+        logInfo(
           `webdav depth="auto_???" is changed to ${this.webdavConfig.depth}`
         );
       }
@@ -400,7 +401,7 @@ export class FakeFsWebdav extends FakeFs {
           this.isNextcloud = true;
           this.nextcloudUploadServerAddress =
             this._getnextcloudUploadServerAddress();
-          console.debug(
+          logDebug(
             `isNextcloud=${this.isNextcloud}, uploadFolder=${this.nextcloudUploadServerAddress}`
           );
           return true;
@@ -417,7 +418,7 @@ export class FakeFsWebdav extends FakeFs {
       compliance.compliance.includes("<http://apache.org/dav/propset/fs/1>")
     ) {
       this.supportApachePartial = true;
-      console.debug(
+      logDebug(
         `supportApachePartial=true, compliance=${JSON.stringify(compliance)}`
       );
       return true;
@@ -425,7 +426,7 @@ export class FakeFsWebdav extends FakeFs {
 
     if (compliance.compliance.includes("sabredav-partialupdate")) {
       this.supportSabrePartial = true;
-      console.debug(
+      logDebug(
         `supportSabrePartial=true, compliance=${JSON.stringify(compliance)}`
       );
       return true;
@@ -678,7 +679,7 @@ export class FakeFsWebdav extends FakeFs {
     await this.client.putFileContents(key, content, {
       overwrite: true,
       onUploadProgress: (progress: any) => {
-        console.info(`Uploaded ${progress.loaded} bytes of ${progress.total}`);
+        logDebug(`Uploaded ${progress.loaded} bytes of ${progress.total}`);
       },
     });
     const k = await this._statFromRoot(key);
@@ -707,7 +708,7 @@ export class FakeFsWebdav extends FakeFs {
       );
     }
     const destUrl = `${this.webdavConfig.address}/${encodeURI(key)}`;
-    console.debug(`destUrl=${destUrl}`);
+    logDebug(`destUrl=${destUrl}`);
 
     const getTmpFolder = (x: string) => {
       if (x.endsWith("/")) {
@@ -719,9 +720,9 @@ export class FakeFsWebdav extends FakeFs {
     };
 
     const uploadServerAddress = this.nextcloudUploadServerAddress;
-    console.debug(`uploadServerAddress=${uploadServerAddress}`);
+    logDebug(`uploadServerAddress=${uploadServerAddress}`);
     const tmpFolderName = getTmpFolder(key);
-    console.debug(`tmpFolderName=${tmpFolderName}`);
+    logDebug(`tmpFolderName=${tmpFolderName}`);
 
     const clientForUpload = createClient(uploadServerAddress, {
       username: tryEncodeUsernamePassword(this.webdavConfig.username),
@@ -742,7 +743,7 @@ export class FakeFsWebdav extends FakeFs {
         Destination: destUrl,
       },
     });
-    console.debug(`finish creating folder`);
+    logDebug(`finish creating folder`);
 
     // upload by chunks
     const sizePerChunk = 5 * 1024 * 1024; // 5 mb
@@ -754,7 +755,7 @@ export class FakeFsWebdav extends FakeFs {
       const { start, end } = chunkRanges[i];
       const tmpFileName = `${i + 1}`.padStart(5, "0");
       const tmpFileNameWithFolder = `${tmpFolderName}/${tmpFileName}`;
-      console.debug(
+      logDebug(
         `start to upload chunk ${
           i + 1
         } to ${tmpFileNameWithFolder} with startInclusive=${start}, endInclusive=${end}`
@@ -770,11 +771,11 @@ export class FakeFsWebdav extends FakeFs {
         }
       );
     }
-    console.debug(`finish upload all chunks`);
+    logDebug(`finish upload all chunks`);
 
     // move to assemble
     const fakeFileToMoveUrl = `${tmpFolderName}/.file`;
-    console.debug(`fakeFileToMoveUrl=${fakeFileToMoveUrl}`);
+    logDebug(`fakeFileToMoveUrl=${fakeFileToMoveUrl}`);
     await clientForUpload.customRequest(fakeFileToMoveUrl, {
       method: "MOVE",
       headers: {
@@ -782,13 +783,13 @@ export class FakeFsWebdav extends FakeFs {
         "OC-Total-Length": `${content.byteLength}`,
       },
     });
-    console.debug(`finish moving file`);
+    logDebug(`finish moving file`);
     // TODO: setting X-OC-Mtime
 
     // stat
-    console.debug(`before stat origKey=${origKey}`);
+    logDebug(`before stat origKey=${origKey}`);
     const k = await this.stat(origKey);
-    console.debug(`after stat`);
+    logDebug(`after stat`);
     if (k.sizeRaw !== content.byteLength) {
       // we failed!
       this.isNextcloud = false; // give up next time!
@@ -796,7 +797,7 @@ export class FakeFsWebdav extends FakeFs {
       console.error(err);
       throw Error(err);
     }
-    console.debug(`after stat, k=${JSON.stringify(k, null, 2)}`);
+    logDebug(`after stat, k=${JSON.stringify(k, null, 2)}`);
 
     return k;
   }

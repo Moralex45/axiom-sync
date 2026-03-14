@@ -4,6 +4,7 @@ import type { Vault } from "obsidian";
 import emojiRegex from "emoji-regex";
 import { base32 } from "rfc4648";
 import XRegExp from "xregexp";
+import { logDebug, logInfo } from "./log";
 
 declare global {
   interface Window {
@@ -76,7 +77,7 @@ export const mkdirpInVault = async (thePath: string, vault: Vault) => {
     const r = await vault.adapter.exists(folder);
     // console.info(r);
     if (!r) {
-      console.info(`mkdir ${folder}`);
+      logInfo(`mkdir ${folder}`);
       await vault.adapter.mkdir(folder);
     }
   }
@@ -610,7 +611,7 @@ export const changeMobileStatusBar = (
     return observer;
   } else {
     if (oldAppContainerObserver !== undefined) {
-      console.debug(`disconnect oldAppContainerObserver`);
+      logDebug(`disconnect oldAppContainerObserver`);
       oldAppContainerObserver.disconnect();
       // biome-ignore lint/style/noParameterAssign: we want gc
       oldAppContainerObserver = undefined;

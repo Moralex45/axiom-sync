@@ -8,6 +8,7 @@ import { nanoid } from "nanoid";
 
 import type { SyncPlanType } from "../advanced/src/sync";
 import type { Entity, SUPPORTED_SERVICES_TYPE } from "./baseTypes";
+import { logDebug, logInfo } from "./log";
 import { unixTimeToStr } from "./misc";
 
 const DB_VERSION_NUMBER_IN_HISTORY = [20211114, 20220108, 20220326, 20240220];
@@ -124,7 +125,7 @@ const migrateDBsFrom20220326To20240220 = async (
 ) => {
   const oldVer = 20220326;
   const newVer = 20240220;
-  console.debug(`start upgrading internal db from ${oldVer} to ${newVer}`);
+  logDebug(`start upgrading internal db from ${oldVer} to ${newVer}`);
 
   // from sync mapping to prev sync
   const syncMappings = await getAllSyncMetaMappingByVault(db, vaultRandomID);
@@ -145,7 +146,7 @@ const migrateDBsFrom20220326To20240220 = async (
   // await clearAllSyncMetaMappingByVault(db, vaultRandomID);
 
   await db.versionTbl.setItem(`${vaultRandomID}\tversion`, newVer);
-  console.debug(`finish upgrading internal db from ${oldVer} to ${newVer}`);
+  logDebug(`finish upgrading internal db from ${oldVer} to ${newVer}`);
 };
 
 const migrateDBs = async (
@@ -264,7 +265,7 @@ export const prepareDBs = async (
     (await db.versionTbl.getItem(`${vaultRandomID}\tversion`)) ??
     (await db.versionTbl.getItem("version"));
   if (originalVersion === null) {
-    console.debug(
+    logDebug(
       `no internal db version, setting it to ${DEFAULT_DB_VERSION_NUMBER}`
     );
     // as of 20240220, we set the version per vault, instead of global "version"
@@ -275,7 +276,7 @@ export const prepareDBs = async (
   } else if (originalVersion === DEFAULT_DB_VERSION_NUMBER) {
     // do nothing
   } else {
-    console.debug(
+    logDebug(
       `trying to upgrade db version from ${originalVersion} to ${DEFAULT_DB_VERSION_NUMBER}`
     );
     await migrateDBs(
@@ -287,7 +288,7 @@ export const prepareDBs = async (
     );
   }
 
-  console.info("db connected");
+  logInfo("db connected");
   return {
     db: db,
     vaultRandomID: vaultRandomID,
@@ -301,7 +302,7 @@ export const destroyDBs = async () => {
   // console.info("db deleted");
   const req = indexedDB.deleteDatabase(DEFAULT_DB_NAME);
   req.onsuccess = (event) => {
-    console.info("db deleted");
+    logInfo("db deleted");
   };
   req.onblocked = (event) => {
     console.warn("trying to delete db but it was blocked");
@@ -499,7 +500,7 @@ export const clearAllPrevSyncRecordByVault = async (
 
 export const clearAllLoggerOutputRecords = async (db: InternalDBs) => {
   await db.loggerOutputTbl.clear();
-  console.debug(`successfully clearAllLoggerOutputRecords`);
+  logDebug(`successfully clearAllLoggerOutputRecords`);
 };
 
 export const upsertLastSuccessSyncTimeByVault = async (

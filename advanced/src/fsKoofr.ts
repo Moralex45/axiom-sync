@@ -11,6 +11,7 @@ import {
 } from "./baseTypesPro";
 import type { paths } from "./koofrApi";
 import type { components } from "./koofrApi";
+import { logDebug, logInfo } from "../../src/log";
 
 type FilesListRecursiveItem = components["schemas"]["FilesListRecursiveItem"];
 type FilesFile = components["schemas"]["FilesFile"];
@@ -108,7 +109,7 @@ export const sendRefreshTokenReq = async (
   apiAddr: string,
   refreshToken: string
 ) => {
-  console.debug(`refreshing token`);
+  logDebug(`refreshing token`);
   const x = await fetch(`${apiAddr}/oauth2/token`, {
     method: "POST",
     headers: {
@@ -124,7 +125,7 @@ export const sendRefreshTokenReq = async (
 
   if (x.status === 200) {
     const y: AuthResSucc = await x.json();
-    console.debug(`new token obtained`);
+    logDebug(`new token obtained`);
     return y;
   } else {
     const y: AuthResFail = await x.json();
@@ -157,7 +158,7 @@ export const setConfigBySuccessfullAuthInplace = async (
 
   await saveUpdatedConfigFunc?.();
 
-  console.info("finish updating local info of Koofr token");
+  logInfo("finish updating local info of Koofr token");
 };
 
 const getNormPathFromBasedir = (x: string, type: "dir" | "file") => {
@@ -285,7 +286,7 @@ const getAuthMiddleware = (
         koofrConfig.accessTokenExpiresAtTimeMs =
           ts + k.expires_in * 1000 - 60 * 2 * 1000;
         await saveUpdatedConfigFunc();
-        console.info("Koofr accessToken updated");
+        logInfo("Koofr accessToken updated");
         return koofrConfig.accessToken;
       };
 
@@ -555,7 +556,7 @@ export class FakeFsKoofr extends FakeFs {
     try {
       await this._init();
     } catch (err) {
-      console.debug(err);
+      logDebug(err);
       callbackFunc?.(err);
       return false;
     }

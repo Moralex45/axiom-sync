@@ -1,6 +1,7 @@
 import isEqual from "lodash/isEqual";
 import { nanoid } from "nanoid";
 import type { Entity } from "./baseTypes";
+import { logInfo } from "./log";
 
 export abstract class FakeFs {
   abstract kind: string;
@@ -20,12 +21,12 @@ export abstract class FakeFs {
   abstract checkConnect(callbackFunc?: any): Promise<boolean>;
   async checkConnectCommonOps(callbackFunc?: any) {
     try {
-      console.info(`check connect: create folder`);
+      logInfo(`check connect: create folder`);
       const folderName = `rs-test-folder-${nanoid()}/`;
       await this.mkdir(folderName);
       // await delay(3000);
 
-      console.info(`check connect: upload file`);
+      logInfo(`check connect: upload file`);
       const filename = `${folderName}rs-test-file-${nanoid()}`;
       const ctime = Date.now();
       const mtime1 = Date.now();
@@ -33,24 +34,24 @@ export abstract class FakeFs {
       await this.writeFile(filename, content1, mtime1, ctime);
       // await delay(3000);
 
-      console.info(`check connect: overwrite file`);
+      logInfo(`check connect: overwrite file`);
       const mtime2 = Date.now();
       const content2 = new ArrayBuffer(200);
       await this.writeFile(filename, content2, mtime2, ctime);
       // await delay(3000);
 
-      console.info(`check connect: download file`);
+      logInfo(`check connect: download file`);
       const content3 = await this.readFile(filename);
       if (!isEqual(content2, content3)) {
         throw Error(`downloaded file is not equal with uploaded file!`);
       }
       // await delay(3000);
 
-      console.info(`check connect: delete file`);
+      logInfo(`check connect: delete file`);
       await this.rm(filename);
       // await delay(3000);
 
-      console.info(`check connect: delete folder`);
+      logInfo(`check connect: delete folder`);
       await this.rm(folderName);
       // await delay(3000);
 
