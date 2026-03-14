@@ -22,7 +22,7 @@
   },
   "source": "main.ts",
   "keywords": [],
-  "author": "",
+  "author": "aamorozovv",
   "license": "MIT",
   "devDependencies": {
     "@biomejs/biome": "1.8.3",
