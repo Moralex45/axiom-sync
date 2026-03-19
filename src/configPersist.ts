@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 import { base64url } from "rfc4648";
 import { reverseString } from "./misc";
 
@@ -11,6 +12,8 @@ interface MessyConfigType {
   readme: string;
   d: string;
 }
+
+export type { MessyConfigType };
 
 /**
  * this should accept the result after loadData();
@@ -30,7 +33,9 @@ export const messyConfigToNormal = (
       out: Uint8Array,
       loose: true,
     });
-    const y = JSON.parse(Buffer.from(parsed).toString("utf-8"));
+    const y = JSON.parse(
+      Buffer.from(parsed).toString("utf-8")
+    ) as AxiomSyncPluginSettings;
     // console.debug("loading, parsed config is:");
     // console.debug(y);
     return y;

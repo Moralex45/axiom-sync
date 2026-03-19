@@ -1,4 +1,3 @@
-// biome-ignore lint/suspicious/noShadowRestrictedNames: <explanation>
 import cloneDeep from "lodash/cloneDeep";
 import throttle from "lodash/throttle";
 import { FileText, RefreshCcw, RotateCcw, createElement } from "lucide";
@@ -13,7 +12,6 @@ import {
   TFolder,
   addIcon,
   requestUrl,
-  requireApiVersion,
   setIcon,
 } from "obsidian";
 import { DEFAULT_PRO_CONFIG } from "../advanced/src/account";
@@ -27,8 +25,8 @@ import type {
   SyncTriggerSourceType,
 } from "./baseTypes";
 import { COMMAND_CALLBACK, COMMAND_URI } from "./baseTypes";
-import { API_VER_ENSURE_REQURL_OK } from "./baseTypesObs";
 import { messyConfigToNormal, normalConfigToMessy } from "./configPersist";
+import type { MessyConfigType } from "./configPersist";
 import { exportVaultSyncPlansToFiles } from "./debugMode";
 import { FakeFsEncrypt } from "./fsEncrypt";
 import { getClient } from "./fsGetter";
@@ -153,7 +151,7 @@ const getStatusBarShortMsgFromSyncSource = (
     case "auto_sync_on_save":
       return t("statusbar_sync_source_auto_sync_on_save");
     default:
-      throw Error(`no translate for ${s}`);
+      throw Error(`no translate for ${String(s)}`);
   }
 };
 
@@ -458,7 +456,6 @@ export default class AxiomSyncPlugin extends Plugin {
 
     const markIsSyncingFunc = (isSyncing: boolean) => {
       this.isSyncing = isSyncing;
-      return Promise.resolve();
     };
 
     const callbackSyncProcess = (
@@ -521,9 +518,9 @@ export default class AxiomSyncPlugin extends Plugin {
     );
 
     fsEncrypt.closeResources();
-    (profiler as Profiler | undefined)?.clear();
+    profiler?.clear();
 
-    this.syncEvent?.trigger("SYNC_DONE");
+    void this.syncEvent?.trigger("SYNC_DONE");
   }
 
   async onload() {
@@ -585,10 +582,7 @@ export default class AxiomSyncPlugin extends Plugin {
       );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      new Notice(
-        message || "error of prepareDBAndVaultRandomID",
-        10 * 1000
-      );
+      new Notice(message || "error of prepareDBAndVaultRandomID", 10 * 1000);
       throw err;
     }
 
@@ -664,7 +658,10 @@ export default class AxiomSyncPlugin extends Plugin {
               this.updateLastSyncMsg(
                 undefined,
                 "not_syncing",
-                await getLastSuccessSyncTimeByVault(this.db, this.vaultRandomID),
+                await getLastSuccessSyncTimeByVault(
+                  this.db,
+                  this.vaultRandomID
+                ),
                 await getLastFailedSyncTimeByVault(this.db, this.vaultRandomID)
               );
             })();
@@ -800,10 +797,15 @@ export default class AxiomSyncPlugin extends Plugin {
   }
 
   async loadSettings() {
+    const loadedData = (await this.loadData()) as
+      | MessyConfigType
+      | AxiomSyncPluginSettings
+      | null
+      | undefined;
     this.settings = Object.assign(
       {},
       cloneDeep(DEFAULT_SETTINGS),
-      messyConfigToNormal(await this.loadData())
+      messyConfigToNormal(loadedData)
     );
     if (
       this.settings.serviceType !== "s3" &&
@@ -885,7 +887,11 @@ export default class AxiomSyncPlugin extends Plugin {
     if (this.settings.deleteToWhere === undefined) {
       this.settings.deleteToWhere = "system";
     }
-    this.settings.logToDB = false; // deprecated as of 20240113
+    Reflect.set(
+      this.settings as typeof this.settings & Record<string, unknown>,
+      "logToDB",
+      false
+    );
 
     Reflect.deleteProperty(
       this.settings.s3 as typeof this.settings.s3 & Record<string, unknown>,
@@ -898,8 +904,16 @@ export default class AxiomSyncPlugin extends Plugin {
     if (this.settings.conflictAction === undefined) {
       this.settings.conflictAction = "keep_newer";
     }
-    if (this.settings.howToCleanEmptyFolder === undefined) {
-      this.settings.howToCleanEmptyFolder = "clean_both";
+    const legacyHowToCleanEmptyFolder = Reflect.get(
+      this.settings as typeof this.settings & Record<string, unknown>,
+      "howToCleanEmptyFolder"
+    );
+    if (legacyHowToCleanEmptyFolder === undefined) {
+      Reflect.set(
+        this.settings as typeof this.settings & Record<string, unknown>,
+        "howToCleanEmptyFolder",
+        "clean_both"
+      );
     }
     if (this.settings.protectModifyPercentage === undefined) {
       this.settings.protectModifyPercentage = 50;
@@ -1046,7 +1060,7 @@ export default class AxiomSyncPlugin extends Plugin {
     ) {
       this.app.workspace.onLayoutReady(() => {
         const intervalID = window.setInterval(() => {
-          this.syncRun("auto");
+          void this.syncRun("auto");
         }, this.settings.autoRunEveryMilliseconds);
         this.autoRunIntervalID = intervalID;
         this.registerInterval(intervalID);
@@ -1062,7 +1076,7 @@ export default class AxiomSyncPlugin extends Plugin {
     ) {
       this.app.workspace.onLayoutReady(() => {
         window.setTimeout(() => {
-          this.syncRun("auto_once_init");
+          void this.syncRun("auto_once_init");
         }, this.settings.initRunAfterMilliseconds);
       });
     }
@@ -1116,7 +1130,7 @@ export default class AxiomSyncPlugin extends Plugin {
   }
 
   _syncOnSaveEvent1 = () => {
-    this._checkCurrFileModified("SYNC");
+    void this._checkCurrFileModified("SYNC");
   };
 
   _syncOnSaveEvent2 = throttle(
@@ -1138,9 +1152,13 @@ export default class AxiomSyncPlugin extends Plugin {
     ) {
       this.app.workspace.onLayoutReady(() => {
         // listen to sync done
-        this.registerEvent(
-          this.syncEvent?.on("SYNC_DONE", this._syncOnSaveEvent1)!
+        const syncDoneEvent = this.syncEvent?.on(
+          "SYNC_DONE",
+          this._syncOnSaveEvent1
         );
+        if (syncDoneEvent !== undefined) {
+          this.registerEvent(syncDoneEvent);
+        }
 
         // listen to current file save changes
         this.registerEvent(this.app.vault.on("modify", this._syncOnSaveEvent2));
@@ -1257,7 +1275,8 @@ export default class AxiomSyncPlugin extends Plugin {
 
     if (syncStatus === "syncing") {
       lastSyncMsg =
-        getStatusBarShortMsgFromSyncSource(t, s!) + t("statusbar_syncing");
+        getStatusBarShortMsgFromSyncSource(t, s ?? "manual") +
+        t("statusbar_syncing");
     } else if (inputTs > 0) {
       let prefix = "";
       if (isSuccess) {
@@ -1339,10 +1358,11 @@ export default class AxiomSyncPlugin extends Plugin {
     try {
       if (!ignoreFileExists) {
         // not exists, directly create
-        // no need to await
-        this.app.vault.adapter.write(ignoreFile, contentText);
+        void this.app.vault.adapter.write(ignoreFile, contentText).catch(() => {
+          // just skip
+        });
       }
-    } catch (error) {
+    } catch {
       // just skip
     }
   }
@@ -1353,7 +1373,7 @@ export default class AxiomSyncPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       // init run
       window.setTimeout(() => {
-        clearAllLoggerOutputRecords(this.db);
+        void clearAllLoggerOutputRecords(this.db);
       }, initClearOutputToDBHistAfterMilliseconds);
     });
   }
@@ -1365,12 +1385,12 @@ export default class AxiomSyncPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       // init run
       window.setTimeout(() => {
-        clearExpiredSyncPlanRecords(this.db);
+        void clearExpiredSyncPlanRecords(this.db);
       }, initClearSyncPlanHistAfterMilliseconds);
 
       // scheduled run
       const intervalID = window.setInterval(() => {
-        clearExpiredSyncPlanRecords(this.db);
+        void clearExpiredSyncPlanRecords(this.db);
       }, autoClearSyncPlanHistAfterMilliseconds);
       this.registerInterval(intervalID);
     });

@@ -26,10 +26,10 @@ const getWorkerErrorMessage = (op: string, err: unknown) => {
       if (text !== undefined && text !== "{}" && text !== "null") {
         return `${op}: ${text}`;
       }
-    } catch (e) {
+    } catch {
       // ignore and fallback below
     }
-    return `${op}: ${String(err)}`;
+    return `${op}: ${Object.prototype.toString.call(err)}`;
   }
   return `${op}: worker returned unknown error`;
 };
@@ -94,7 +94,7 @@ export class CipherRclone {
 
           channel.port2.onmessageerror = (event) => {
             // console.debug("main: receiving error in prepare");
-            reject(event);
+            reject(new Error(`prepare message error: ${event.type}`));
           };
 
           // console.debug("main: before postMessage in prepare");
@@ -142,7 +142,7 @@ export class CipherRclone {
 
       channel.port2.onmessageerror = (event) => {
         // console.debug("main: receiving error in encryptNameByCallingWorker");
-        reject(event);
+        reject(new Error(`encryptName message error: ${event.type}`));
       };
 
       // console.debug("main: before postMessage in encryptNameByCallingWorker");
@@ -182,8 +182,7 @@ export class CipherRclone {
 
       channel.port2.onmessageerror = (event) => {
         // console.debug("main: receiving error in decryptNameByCallingWorker");
-        reject(event);
-        channel;
+        reject(new Error(`decryptName message error: ${event.type}`));
       };
 
       // console.debug("main: before postMessage in decryptNameByCallingWorker");
@@ -226,7 +225,7 @@ export class CipherRclone {
 
       channel.port2.onmessageerror = (event) => {
         // console.debug("main: receiving error in encryptContentByCallingWorker");
-        reject(event);
+        reject(new Error(`encryptContent message error: ${event.type}`));
       };
 
       // console.debug(
@@ -277,7 +276,7 @@ export class CipherRclone {
         // console.debug(
         //   "main: receiving onmessageerror in decryptContentByCallingWorker"
         // );
-        reject(event);
+        reject(new Error(`decryptContent message error: ${event.type}`));
       };
 
       // console.debug(

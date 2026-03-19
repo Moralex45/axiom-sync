@@ -41,17 +41,19 @@ export class SyncAlgoV3Modal extends Modal {
       .createEl("button", {
         text: t("settings_lang_ru"),
       })
-      .addEventListener("click", async () => {
-        await this.plugin.i18n.changeTo("ru");
-        this.renderContent();
+      .addEventListener("click", () => {
+        void this.plugin.i18n.changeTo("ru").then(() => {
+          this.renderContent();
+        });
       });
     langSwitch
       .createEl("button", {
         text: t("settings_lang_en"),
       })
-      .addEventListener("click", async () => {
-        await this.plugin.i18n.changeTo("en");
-        this.renderContent();
+      .addEventListener("click", () => {
+        void this.plugin.i18n.changeTo("en").then(() => {
+          this.renderContent();
+        });
       });
 
     const ul = contentEl.createEl("ul");
@@ -147,7 +149,7 @@ export class SyncAlgoV3Modal extends Modal {
     contentEl.empty();
     if (this.agree) {
       logInfo("agree to use the new algorithm");
-      this.plugin.saveAgreeToUseNewSyncAlgorithm();
+      void this.plugin.saveAgreeToUseNewSyncAlgorithm();
       this.plugin.enableAutoSyncIfSet();
       this.plugin.enableInitSyncIfSet();
       this.plugin.toggleSyncOnSaveIfSet();

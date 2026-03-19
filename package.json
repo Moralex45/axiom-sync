@@ -1,6 +1,6 @@
 {
   "name": "axiom-sync",
-  "version": "0.5.26",
+  "version": "0.5.27",
   "description": "Sync vaults with S3-compatible storage or Telegram.",
   "scripts": {
     "dev2": "node esbuild.config.mjs --watch",

@@ -31,6 +31,7 @@ import {
   isHiddenPath,
   isSpecialFolderNameToSkip,
   roughSizeOfObject,
+  toText,
   unixTimeToStr,
 } from "../../src/misc";
 import type { Profiler } from "../../src/profiler";
@@ -460,7 +461,7 @@ const ensembleMixedEnties = async (
       const prevSyncCopied = await fsEncrypt.encryptEntity(
         copyEntityAndFixTimeFormat(prevSync, serviceType)
       );
-      if (finalMappings.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(finalMappings, key)) {
         finalMappings[key].prevSync = prevSyncCopied;
       } else {
         finalMappings[key] = {
@@ -506,7 +507,7 @@ const ensembleMixedEnties = async (
     const localCopied = await fsEncrypt.encryptEntity(
       copyEntityAndFixTimeFormat(local, serviceType)
     );
-    if (finalMappings.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(finalMappings, key)) {
       finalMappings[key].local = localCopied;
     } else {
       finalMappings[key] = {
@@ -541,7 +542,7 @@ const ensembleMixedEnties = async (
  * Basically follow the sync algorithm of https://github.com/Jwink3101/syncrclone
  * Also deal with syncDirection which makes it more complicated
  */
-const getSyncPlanInplace = async (
+const getSyncPlanInplace = (
   mixedEntityMappings: Record<string, MixedEntity>,
   skipSizeLargerThan: number,
   conflictAction: ConflictActionType,
@@ -913,7 +914,9 @@ const getSyncPlanInplace = async (
                 keptFolder.add(getParentFolder(key));
               } else {
                 throw Error(
-                  `no idea how to deal with syncDirection=${syncDirection} while conflict created`
+                  `no idea how to deal with syncDirection=${String(
+                    syncDirection
+                  )} while conflict created`
                 );
               }
             } else {
@@ -975,7 +978,9 @@ const getSyncPlanInplace = async (
                 keptFolder.add(getParentFolder(key));
               } else {
                 throw Error(
-                  `no idea how to deal with syncDirection=${syncDirection} while conflict modified`
+                  `no idea how to deal with syncDirection=${String(
+                    syncDirection
+                  )} while conflict modified`
                 );
               }
             }
@@ -1197,7 +1202,9 @@ const getSyncPlanInplace = async (
   if (keptFolder.size > 0) {
     console.error(sortedKeys);
     console.error(mixedEntityMappings);
-    throw Error(`unexpectedly keptFolder no decisions: ${[...keptFolder]}`);
+    throw Error(
+      `unexpectedly keptFolder no decisions: ${[...keptFolder].join(", ")}`
+    );
   }
 
   // finally we want to make our life easier
@@ -1610,12 +1617,16 @@ const dispatchOperationToActualV3 = async (
     r.decision === "conflict_modified_then_smart_conflict"
   ) {
     // heavy lifting
-    if (isMergable(r.local!, r.remote!)) {
+    if (
+      r.local !== undefined &&
+      r.remote !== undefined &&
+      isMergable(r.local, r.remote)
+    ) {
       const origContent = await getFileContentHistoryByVaultAndProfile(
         db,
         vaultRandomID,
         profileID,
-        r.local!
+        r.local
       );
       // console.debug(`we get origContent:`)
       // console.debug(origContent)
@@ -1838,7 +1849,9 @@ export const doActualSync = async (
         const val = singleLevelOps[k];
         const key = val.key;
         if (key === undefined) {
-          throw Error(`sync operation key is undefined: ${JSON.stringify(val)}`);
+          throw Error(
+            `sync operation key is undefined: ${JSON.stringify(val)}`
+          );
         }
 
         const fn = async () => {
@@ -1908,7 +1921,7 @@ const formatSyncError = (err: unknown) => {
     const errorWithCause = err as Error & { cause?: unknown };
     const causeMsg =
       errorWithCause.cause !== undefined
-        ? `; cause=${String(errorWithCause.cause)}`
+        ? `; cause=${toText(errorWithCause.cause)}`
         : "";
     const stackTop =
       typeof err.stack === "string"
@@ -1921,7 +1934,7 @@ const formatSyncError = (err: unknown) => {
   }
   try {
     return JSON.stringify(err);
-  } catch (e) {
+  } catch {
     return String(err);
   }
 };
@@ -2050,7 +2063,7 @@ export async function syncer(
     );
     profiler?.insert(`finish step${step} (build partial mixedEntity)`);
 
-    mixedEntityMappings = await getSyncPlanInplace(
+    mixedEntityMappings = getSyncPlanInplace(
       mixedEntityMappings,
       settings.skipSizeLargerThan ?? -1,
       settings.conflictAction ?? "keep_newer",
@@ -2117,15 +2130,14 @@ export async function syncer(
       let details = "";
       try {
         details = JSON.stringify(error);
-      } catch (e) {
-        details = `${error}`;
+      } catch {
+        details = toText(error);
       }
       normalizedError = new Error(`sync failed: ${details}`);
     }
     await errNotifyFunc?.(triggerSource, normalizedError);
 
     profiler?.insert("finish error branch");
-  } finally {
   }
 
   profiler?.insert("finish syncRun");

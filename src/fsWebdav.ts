@@ -16,7 +16,7 @@ import type { Entity, WebdavConfig } from "./baseTypes";
 import { VALID_REQURL } from "./baseTypesObs";
 import { FakeFs } from "./fsAll";
 import { logDebug, logInfo } from "./log";
-import { bufferToArrayBuffer, delay, splitFileSizeToChunkRanges } from "./misc";
+import { bufferToArrayBuffer, splitFileSizeToChunkRanges } from "./misc";
 
 type UploadProgress = {
   loaded: number;
@@ -29,7 +29,12 @@ type UploadProgress = {
  * @returns true if all are iso 8859 1 chars
  */
 function onlyAscii(str: string) {
-  return !/[^\u0000-\u00ff]/g.test(str);
+  for (const char of str) {
+    if (char.codePointAt(0)! > 0xff) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -46,6 +51,7 @@ function objKeyToLower(obj: Record<string, string>) {
 // @ts-ignore
 import { getPatcher } from "webdav/dist/web/index.js";
 if (VALID_REQURL) {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- webdav patcher ships untyped runtime hooks
   getPatcher().patch(
     "request",
     async (options: RequestOptionsWithState): Promise<Response> => {
@@ -57,7 +63,9 @@ if (VALID_REQURL) {
         transformedHeaders["accept"] ?? transformedHeaders["content-type"];
 
       const retractedHeaders = { ...transformedHeaders };
-      if (retractedHeaders.hasOwnProperty("authorization")) {
+      if (
+        Object.prototype.hasOwnProperty.call(retractedHeaders, "authorization")
+      ) {
         retractedHeaders["authorization"] = "<retracted>";
       }
 
@@ -98,7 +106,7 @@ if (VALID_REQURL) {
       const rspHeaders = objKeyToLower({ ...r.headers });
       // console.debug(`rspHeaders: ${JSON.stringify(rspHeaders, null, 2)}`);
       for (const key in rspHeaders) {
-        if (rspHeaders.hasOwnProperty(key)) {
+        if (Object.prototype.hasOwnProperty.call(rspHeaders, key)) {
           // avoid the error:
           // Failed to read the 'headers' property from 'ResponseInit': String contains non ISO-8859-1 code point.
           // const possibleNonAscii = [
@@ -146,7 +154,7 @@ if (VALID_REQURL) {
 
 // @ts-ignore
 // biome-ignore lint: we want to ts-ignore the next line
-import { AuthType, BufferLike, createClient } from "webdav/dist/web/index.js";
+import { AuthType, createClient } from "webdav/dist/web/index.js";
 
 export const DEFAULT_WEBDAV_CONFIG = {
   address: "",
@@ -309,17 +317,23 @@ export class FakeFsWebdav extends FakeFs {
       this.webdavConfig.username !== "" &&
       this.webdavConfig.password !== ""
     ) {
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- AuthType is weakly typed in the web bundle */
+      const authType =
+        this.webdavConfig.authType === "digest"
+          ? AuthType.Digest
+          : AuthType.Password;
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- createClient is weakly typed in the web bundle
       this.client = createClient(this.webdavConfig.address, {
         username: tryEncodeUsernamePassword(this.webdavConfig.username),
         password: tryEncodeUsernamePassword(this.webdavConfig.password),
         headers: headers,
-        authType:
-          this.webdavConfig.authType === "digest"
-            ? AuthType.Digest
-            : AuthType.Password,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- authType comes from weakly typed webdav bundle
+        authType,
       });
     } else {
       logInfo("no password");
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- createClient is weakly typed in the web bundle
       this.client = createClient(this.webdavConfig.address, {
         headers: headers,
       });
@@ -380,7 +394,7 @@ export class FakeFsWebdav extends FakeFs {
       s[s.length - 2] = "uploads";
       return s.join("/");
     }
-    throw Error(`cannot construct upload address for ${s}`);
+    throw Error(`cannot construct upload address for ${s.join("/")}`);
   };
 
   async _checkPartialSupport() {
@@ -467,14 +481,14 @@ export class FakeFsWebdav extends FakeFs {
         const subContents = [] as FileStat[];
         for (const singleChunk of itemsToFetchChunks) {
           const r = singleChunk.map(async (x) => {
-            let k = (await this.client.getDirectoryContents(x, {
+            let k = await this.client.getDirectoryContents(x, {
               deep: false,
               details: false /* no need for verbose details here */,
               // TODO: to support .obsidian,
               // we need to load all files including dot,
               // anyway to reduce the resources?
               // glob: "/**" /* avoid dot files by using glob */,
-            })) as FileStat[];
+            });
             k = k.filter((sub) => stripLeadingPath(sub.filename) !== x);
             return k;
           });
@@ -504,7 +518,7 @@ export class FakeFsWebdav extends FakeFs {
       }
     } else {
       // the remote supports infinity propfind
-      contents = (await this.client.getDirectoryContents(
+      contents = await this.client.getDirectoryContents(
         `/${this.remoteBaseDir}`,
         {
           deep: true,
@@ -514,7 +528,7 @@ export class FakeFsWebdav extends FakeFs {
           // anyway to reduce the resources?
           // glob: "/**" /* avoid dot files by using glob */,
         }
-      )) as FileStat[];
+      );
     }
 
     const result = contents
@@ -526,13 +540,13 @@ export class FakeFsWebdav extends FakeFs {
   async walkPartial(): Promise<Entity[]> {
     await this._init();
 
-    const contents = (await this.client.getDirectoryContents(
+    const contents = await this.client.getDirectoryContents(
       `/${this.remoteBaseDir}`,
       {
         deep: false, // partial, no need to recursive here
         details: false /* no need for verbose details here */,
       }
-    )) as FileStat[];
+    );
     return contents
       .map((x) => fromWebdavItemToEntity(x, this.remoteBaseDir))
       .filter((x) => x.keyRaw !== "/");
@@ -729,19 +743,25 @@ export class FakeFsWebdav extends FakeFs {
     const tmpFolderName = getTmpFolder(key);
     logDebug(`tmpFolderName=${tmpFolderName}`);
 
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- AuthType is weakly typed in the web bundle */
+    const uploadAuthType =
+      this.webdavConfig.authType === "digest"
+        ? AuthType.Digest
+        : AuthType.Password;
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- createClient is weakly typed in the web bundle
     const clientForUpload = createClient(uploadServerAddress, {
       username: tryEncodeUsernamePassword(this.webdavConfig.username),
       password: tryEncodeUsernamePassword(this.webdavConfig.password),
       headers: {
         "Cache-Control": "no-cache",
       },
-      authType:
-        this.webdavConfig.authType === "digest"
-          ? AuthType.Digest
-          : AuthType.Password,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- authType comes from weakly typed webdav bundle
+      authType: uploadAuthType,
     });
 
     // create folder
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- clientForUpload comes from weakly typed webdav bundle
     await clientForUpload.createDirectory(tmpFolderName, {
       method: "MKCOL",
       headers: {
@@ -765,6 +785,7 @@ export class FakeFsWebdav extends FakeFs {
           i + 1
         } to ${tmpFileNameWithFolder} with startInclusive=${start}, endInclusive=${end}`
       );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- clientForUpload comes from weakly typed webdav bundle
       await clientForUpload.putFileContents(
         tmpFileNameWithFolder,
         content.slice(start, end + 1),
@@ -781,6 +802,7 @@ export class FakeFsWebdav extends FakeFs {
     // move to assemble
     const fakeFileToMoveUrl = `${tmpFolderName}/.file`;
     logDebug(`fakeFileToMoveUrl=${fakeFileToMoveUrl}`);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- clientForUpload comes from weakly typed webdav bundle
     await clientForUpload.customRequest(fakeFileToMoveUrl, {
       method: "MOVE",
       headers: {
@@ -896,7 +918,7 @@ export class FakeFsWebdav extends FakeFs {
   }
 
   async _readFileFromRoot(key: string): Promise<ArrayBuffer> {
-    const buff = (await this.client.getFileContents(key)) as BufferLike;
+    const buff = await this.client.getFileContents(key);
     if (buff instanceof ArrayBuffer) {
       return buff;
     } else if (buff instanceof Buffer) {
@@ -963,12 +985,12 @@ export class FakeFsWebdav extends FakeFs {
     return await this.checkConnectCommonOps(callbackFunc);
   }
 
-  async getUserDisplayName(): Promise<string> {
-    throw new Error("Method not implemented.");
+  getUserDisplayName(): Promise<string> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async revokeAuth(): Promise<void> {
-    throw new Error("Method not implemented.");
+  revokeAuth(): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   allowEmptyFile(): boolean {

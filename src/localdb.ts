@@ -11,7 +11,6 @@ import type { Entity, SUPPORTED_SERVICES_TYPE } from "./baseTypes";
 import { logDebug, logInfo } from "./log";
 import { unixTimeToStr } from "./misc";
 
-const DB_VERSION_NUMBER_IN_HISTORY = [20211114, 20220108, 20220326, 20240220];
 export const DEFAULT_DB_VERSION_NUMBER: number = 20240220;
 export const DEFAULT_DB_NAME = "axiomsyncdb";
 export const DEFAULT_TBL_VERSION = "schemaversion";
@@ -23,6 +22,7 @@ export const DEFAULT_TBL_PREV_SYNC_RECORDS = "prevsyncrecords";
 export const DEFAULT_TBL_PROFILER_RESULTS = "profilerresults";
 export const DEFAULT_TBL_FILE_CONTENT_HISTORY = "filecontenthistory";
 
+/* eslint-disable @typescript-eslint/no-deprecated -- Legacy tables remain only for DB migration support. */
 /**
  * @deprecated
  */
@@ -295,7 +295,7 @@ export const prepareDBs = async (
   };
 };
 
-export const destroyDBs = async () => {
+export const destroyDBs = () => {
   // await localforage.dropInstance({
   //   name: DEFAULT_DB_NAME,
   // });
@@ -362,6 +362,7 @@ export const clearAllSyncMetaMappingByVault = async (
   //   }
   // }
 };
+/* eslint-enable @typescript-eslint/no-deprecated */
 
 export const insertSyncPlanRecordByVault = async (
   db: InternalDBs,
@@ -518,9 +519,9 @@ export const getLastSuccessSyncTimeByVault = async (
   db: InternalDBs,
   vaultRandomID: string
 ) => {
-  return (await db.simpleKVForMiscTbl.getItem(
+  return await db.simpleKVForMiscTbl.getItem<number | null>(
     `${vaultRandomID}-lastSuccessSyncMillis`
-  )) as number | null | undefined;
+  );
 };
 
 export const upsertLastFailedSyncTimeByVault = async (
@@ -538,9 +539,9 @@ export const getLastFailedSyncTimeByVault = async (
   db: InternalDBs,
   vaultRandomID: string
 ) => {
-  return (await db.simpleKVForMiscTbl.getItem(
+  return await db.simpleKVForMiscTbl.getItem<number | null>(
     `${vaultRandomID}-lastFailedSyncMillis`
-  )) as number | null | undefined;
+  );
 };
 
 export const upsertPluginVersionByVault = async (

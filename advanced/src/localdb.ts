@@ -20,9 +20,9 @@ export const getFileContentHistoryByVaultAndProfile = async (
   profileID: string,
   prevSync: Entity
 ) => {
-  return (await db.fileContentHistoryTbl.getItem(
+  return await db.fileContentHistoryTbl.getItem<ArrayBuffer | null>(
     `${vaultRandomID}\t${profileID}\t${prevSync.key}`
-  )) as ArrayBuffer | null | undefined;
+  );
 };
 
 export const clearFileContentHistoryByVaultAndProfile = async (

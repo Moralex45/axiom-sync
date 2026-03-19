@@ -62,13 +62,19 @@ const fromBlobPropsToEntity = (
   remotePrefix: string
 ): Entity => {
   const key = getNormPath(name, remotePrefix);
+  const lastModified = props.lastModified;
+  if (lastModified === undefined) {
+    throw Error(`missing lastModified for blob ${name}`);
+  }
 
-  let mtimeCli = props.lastModified!.valueOf();
+  let mtimeCli = lastModified.valueOf();
   const mtimeStr = props.metadata?.mtime;
   if (mtimeStr !== undefined && mtimeStr !== "") {
     try {
       mtimeCli = new Date(mtimeStr).valueOf();
-    } catch {}
+    } catch {
+      mtimeCli = lastModified.valueOf();
+    }
   }
 
   let hash: undefined | string = undefined;
@@ -80,7 +86,7 @@ const fromBlobPropsToEntity = (
     key: key,
     keyRaw: key,
     mtimeCli: mtimeCli,
-    mtimeSvr: props.lastModified!.valueOf(),
+    mtimeSvr: lastModified.valueOf(),
     size: props.contentLength ?? 0,
     sizeRaw: props.contentLength ?? 0,
     hash: hash,
@@ -143,7 +149,7 @@ export class FakeFsAzureBlobStorage extends FakeFs {
           continue;
         }
         if (
-          !this.synthFoldersCache.hasOwnProperty(f) ||
+          !Object.prototype.hasOwnProperty.call(this.synthFoldersCache, f) ||
           entity.mtimeSvr! >= this.synthFoldersCache[f].mtimeSvr!
         ) {
           this.synthFoldersCache[f] = {
@@ -196,11 +202,7 @@ export class FakeFsAzureBlobStorage extends FakeFs {
     return entity;
   }
 
-  async mkdir(
-    key: string,
-    mtime?: number | undefined,
-    ctime?: number | undefined
-  ): Promise<Entity> {
+  async mkdir(key: string, mtime?: number, ctime?: number): Promise<Entity> {
     if (!key.endsWith("/")) {
       throw new Error(`You should not call mkdir on ${key}!`);
     }
@@ -281,14 +283,14 @@ export class FakeFsAzureBlobStorage extends FakeFs {
     return await (await rsp.blobBody)!.arrayBuffer();
   }
 
-  async rename(_key1: string, _key2: string): Promise<void> {
-    throw new Error("Method not implemented.");
+  rename(_key1: string, _key2: string): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   async rm(key: string): Promise<void> {
     const blobPath = getBlobPath(key, this.remotePrefix);
     if (key.endsWith("/")) {
-      if (this.synthFoldersCache.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(this.synthFoldersCache, key)) {
         delete this.synthFoldersCache[key];
       }
 
@@ -298,7 +300,9 @@ export class FakeFsAzureBlobStorage extends FakeFs {
       try {
         const blobClient = this.containerClient.getBlockBlobClient(blobPath);
         await blobClient.deleteIfExists();
-      } catch (e) {}
+      } catch {
+        return;
+      }
     } else {
       // the file should really exist
       const blobClient = this.containerClient.getBlockBlobClient(blobPath);
@@ -325,12 +329,12 @@ export class FakeFsAzureBlobStorage extends FakeFs {
     return await this.checkConnectCommonOps(callbackFunc);
   }
 
-  async getUserDisplayName(): Promise<string> {
-    throw new Error("Method not implemented.");
+  getUserDisplayName(): Promise<string> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async revokeAuth(): Promise<void> {
-    throw new Error("Method not implemented.");
+  revokeAuth(): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   allowEmptyFile(): boolean {

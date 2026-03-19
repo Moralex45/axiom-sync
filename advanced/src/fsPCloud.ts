@@ -35,7 +35,7 @@ export interface AuthAllowFirstRes {
 /**
  * https://docs.pcloud.com/methods/oauth_2.0/authorize.html
  */
-export const generateAuthUrl = async (hasCallback: boolean) => {
+export const generateAuthUrl = (hasCallback: boolean) => {
   const clientID = PCLOUD_CLIENT_ID;
   const state = nanoid();
   let authUrl = `https://my.pcloud.com/oauth2/authorize?response_type=code&client_id=${clientID}&state=${state}`;
@@ -157,6 +157,11 @@ interface StatRawResponse {
   fileids: number[];
   metadata: (File | Folder)[];
   checksums: { sha1: string; sha256?: string; md5?: string }[] | undefined;
+}
+
+interface GetFileLinkResponse {
+  hosts: string[];
+  path: string;
 }
 
 const fromRawResponseToEntity = (
@@ -351,15 +356,20 @@ export class FakeFsPCloud extends FakeFs {
         this.vaultFolderExists = true;
       } else {
         // not found, let's create it!
-        const f: Folder = await this.client.createfolder(this.remoteBaseDir, 0);
+        const f = (await this.client.createfolder(this.remoteBaseDir, 0)) as
+          | Folder
+          | undefined;
         // console.debug(f);
+        if (f === undefined) {
+          throw Error(`failed to create remote base dir ${this.remoteBaseDir}`);
+        }
         this.baseDirID = f.folderid;
         this.vaultFolderExists = true;
       }
     }
   }
 
-  async _getAccessToken() {
+  _getAccessToken() {
     if (this.pCloudConfig.accessToken === "") {
       throw Error("The user has not manually auth yet.");
     }
@@ -409,11 +419,7 @@ export class FakeFsPCloud extends FakeFs {
     return cachedEntity;
   }
 
-  async mkdir(
-    key: string,
-    _mtime?: number | undefined,
-    _ctime?: number | undefined
-  ): Promise<Entity> {
+  async mkdir(key: string, _mtime?: number, _ctime?: number): Promise<Entity> {
     if (!key.endsWith("/")) {
       throw Error(`you should not mkdir on key=${key}`);
     }
@@ -451,10 +457,10 @@ export class FakeFsPCloud extends FakeFs {
     let folderItselfWithoutSlash = folderLevels[folderLevels.length - 1];
     folderItselfWithoutSlash = folderItselfWithoutSlash.split("/").pop()!;
 
-    const f = await this.client.createfolder(
+    const f = (await this.client.createfolder(
       folderItselfWithoutSlash,
       parentID
-    );
+    )) as Folder;
 
     const entity = fromRawResponseToEntity(f, parentFolderPath);
     // insert into cache
@@ -502,7 +508,7 @@ export class FakeFsPCloud extends FakeFs {
     // no idea how to use the sdk, let's use https here
     // https://docs.pcloud.com/methods/file/uploadfile.html
     const params = new URLSearchParams({
-      access_token: await this._getAccessToken(),
+      access_token: this._getAccessToken(),
       folderid: `${parentID}`,
       filename: fileItself,
       nopartial: `1`,
@@ -536,15 +542,14 @@ export class FakeFsPCloud extends FakeFs {
           }),
           delay(timeoutMs),
         ]);
-      } catch (e) {
-        // console.warn(`we abort the request of uploading empty file ${key}:`);
-        // console.warn(e);
+      } catch {
+        logDebug(`empty file upload timed out for ${key}`);
       }
 
       // raw stat here
       // https://docs.pcloud.com/methods/file/stat.html
       const params = new URLSearchParams({
-        access_token: await this._getAccessToken(),
+        access_token: this._getAccessToken(),
         path: getPCloudPath(key, this.remoteBaseDir),
       });
       const apiUrlStat = `https://${this.pCloudConfig.hostname}/stat?${params}`;
@@ -568,7 +573,7 @@ export class FakeFsPCloud extends FakeFs {
     }
 
     const params = new URLSearchParams({
-      access_token: await this._getAccessToken(),
+      access_token: this._getAccessToken(),
       forcedownload: `1`,
       fileid: `${fileID}`,
     });
@@ -576,7 +581,7 @@ export class FakeFsPCloud extends FakeFs {
 
     // Referrer is restricted to pcloud.com.
     // we need to bypass it
-    const meta = (await requestUrl(urlMeta)).json;
+    const meta = (await requestUrl(urlMeta)).json as GetFileLinkResponse;
     // console.debug(meta);
     const link: string = `https://${meta.hosts[0]}${meta.path}`;
     const rsp = await requestUrl(link);
@@ -619,14 +624,12 @@ export class FakeFsPCloud extends FakeFs {
     return await this.checkConnectCommonOps(callbackFunc);
   }
 
-  async getUserDisplayName(): Promise<string> {
-    await this._init();
-    throw new Error("Method not implemented.");
+  getUserDisplayName(): Promise<string> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async revokeAuth(): Promise<void> {
-    await this._init();
-    throw new Error("Method not implemented.");
+  revokeAuth(): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   allowEmptyFile(): boolean {

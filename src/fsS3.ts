@@ -23,7 +23,7 @@ import { requestTimeout } from "@smithy/fetch-http-handler/dist-es/request-timeo
 import { type HttpRequest, HttpResponse } from "@smithy/protocol-http";
 import { buildQueryString } from "@smithy/querystring-builder";
 import * as mime from "mime-types";
-import { Platform, type RequestUrlParam, requestUrl } from "obsidian";
+import { type RequestUrlParam, requestUrl } from "obsidian";
 import PQueue from "p-queue";
 import { DEFAULT_CONTENT_TYPE, type S3Config } from "./baseTypes";
 import { VALID_REQURL } from "./baseTypesObs";
@@ -38,6 +38,10 @@ const createAggregateError = (errors: Error[], message = "Multiple errors") => {
   err.errors = errors;
   return err;
 };
+
+const requestTimeoutTyped = requestTimeout as (
+  timeoutInMs?: number
+) => Promise<never>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // special handler using Obsidian requestUrl
@@ -91,8 +95,14 @@ class ObsHttpHandler extends FetchHttpHandler {
       urlObj.host = this.reverseProxyNoSignUrl;
       url = urlObj.href;
     }
-    const body =
+    const rawBody: unknown =
       method === "GET" || method === "HEAD" ? undefined : request.body;
+    const body: string | ArrayBuffer | ArrayBufferView | undefined =
+      typeof rawBody === "string" ||
+      rawBody instanceof ArrayBuffer ||
+      ArrayBuffer.isView(rawBody)
+        ? rawBody
+        : undefined;
 
     const transformedHeaders: Record<string, string> = {};
     for (const key of Object.keys(request.headers)) {
@@ -100,7 +110,9 @@ class ObsHttpHandler extends FetchHttpHandler {
       if (keyLower === "host" || keyLower === "content-length") {
         continue;
       }
-      transformedHeaders[keyLower] = request.headers[key];
+      const headerValue = request.headers[key];
+      transformedHeaders[keyLower] =
+        typeof headerValue === "string" ? headerValue : String(headerValue);
     }
 
     let contentType: string | undefined = undefined;
@@ -108,10 +120,10 @@ class ObsHttpHandler extends FetchHttpHandler {
       contentType = transformedHeaders["content-type"];
     }
 
-    let transformedBody: string | ArrayBuffer | undefined = body as
-      | string
-      | ArrayBuffer
-      | undefined;
+    let transformedBody: string | ArrayBuffer | undefined =
+      typeof body === "string" || body instanceof ArrayBuffer
+        ? body
+        : undefined;
     if (ArrayBuffer.isView(body)) {
       transformedBody = bufferToArrayBuffer(body);
     }
@@ -124,7 +136,7 @@ class ObsHttpHandler extends FetchHttpHandler {
       contentType: contentType,
     };
 
-    const raceOfPromises = [
+    const raceOfPromises: Promise<{ response: HttpResponse }>[] = [
       requestUrl(param).then((rsp) => {
         const headers = rsp.headers;
         const headersLower: Record<string, string> = {};
@@ -145,7 +157,7 @@ class ObsHttpHandler extends FetchHttpHandler {
           }),
         };
       }),
-      requestTimeout(this.requestTimeoutInMs),
+      requestTimeoutTyped(this.requestTimeoutInMs),
     ];
 
     if (abortSignal) {
@@ -159,7 +171,7 @@ class ObsHttpHandler extends FetchHttpHandler {
         })
       );
     }
-    return Promise.race(raceOfPromises);
+    return await Promise.race(raceOfPromises);
   }
 }
 
@@ -212,18 +224,22 @@ const getObjectBodyToArrayBuffer = async (
     throw Error(`ObjectBody is undefined and don't know how to deal with it`);
   }
   if (b instanceof Readable) {
-    return (await new Promise((resolve, reject) => {
+    return await new Promise<ArrayBuffer>((resolve, reject) => {
       const chunks: Uint8Array[] = [];
-      b.on("data", (chunk) => chunks.push(chunk));
+      b.on("data", (chunk: Buffer | Uint8Array) =>
+        chunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk))
+      );
       b.on("error", reject);
       b.on("end", () => resolve(bufferToArrayBuffer(Buffer.concat(chunks))));
-    })) as ArrayBuffer;
+    });
   } else if (b instanceof ReadableStream) {
     return await new Response(b, {}).arrayBuffer();
   } else if (b instanceof Blob) {
     return await b.arrayBuffer();
   } else {
-    throw TypeError(`The type of ${b} is not one of the supported types`);
+    throw TypeError(
+      `Unsupported S3 body type: ${Object.prototype.toString.call(b)}`
+    );
   }
 };
 
@@ -485,7 +501,7 @@ export class FakeFsS3 extends FakeFs {
       if (this.s3Config.useAccurateMTime) {
         // head requests of all objects, love it
         for (const content of rsp.Contents) {
-          queueHead.add(async () => {
+          void queueHead.add(async () => {
             const rspHead = await this.s3Client.send(
               new HeadObjectCommand({
                 Bucket: this.s3Config.s3BucketName,
@@ -554,7 +570,7 @@ export class FakeFsS3 extends FakeFs {
           continue;
         }
         if (
-          !this.synthFoldersCache.hasOwnProperty(f) ||
+          !Object.prototype.hasOwnProperty.call(this.synthFoldersCache, f) ||
           remoteEntity.mtimeSvr! >= this.synthFoldersCache[f].mtimeSvr!
         ) {
           this.synthFoldersCache[f] = {
@@ -579,7 +595,7 @@ export class FakeFsS3 extends FakeFs {
   }
 
   async stat(key: string): Promise<Entity> {
-    if (this.synthFoldersCache.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(this.synthFoldersCache, key)) {
       return this.synthFoldersCache[key];
     }
     let keyFullPath = key;
@@ -785,7 +801,7 @@ export class FakeFsS3 extends FakeFs {
     }
 
     if (key.endsWith("/")) {
-      if (this.synthFoldersCache.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(this.synthFoldersCache, key)) {
         delete this.synthFoldersCache[key];
         return;
       }
@@ -805,7 +821,7 @@ export class FakeFsS3 extends FakeFs {
             Key: remoteFileName,
           })
         );
-      } catch (e) {
+      } catch {
         // pass
       }
     } else {
@@ -876,12 +892,12 @@ export class FakeFsS3 extends FakeFs {
     return await this.checkConnectCommonOps(callbackFunc);
   }
 
-  async getUserDisplayName(): Promise<string> {
-    throw new Error("Method not implemented.");
+  getUserDisplayName(): Promise<string> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async revokeAuth() {
-    throw new Error("Method not implemented.");
+  revokeAuth(): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   allowEmptyFile(): boolean {

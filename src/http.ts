@@ -116,14 +116,14 @@ export const httpRequest = async (
       status: response.status,
       statusText: `${response.status}`,
       headers: response.headers ?? {},
-      text: async () => responseText,
-      json: async <T>() => {
+      text: () => Promise.resolve(responseText),
+      json: <T>() => {
         if (response.json !== undefined) {
-          return response.json as T;
+          return Promise.resolve(response.json as T);
         }
-        return JSON.parse(responseText) as T;
+        return Promise.resolve(JSON.parse(responseText) as T);
       },
-      arrayBuffer: async () => responseBuffer,
+      arrayBuffer: () => Promise.resolve(responseBuffer),
     };
   } catch (error) {
     const nativeFetch = getNativeFetch();

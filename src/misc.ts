@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 import * as path from "path";
 import type { Vault } from "obsidian";
 
@@ -58,7 +59,6 @@ export const getFolderLevels = (x: string, addEndingSlash = false) => {
   }
 
   const y1 = x.split("/");
-  const i = 0;
   for (let index = 0; index + 1 < y1.length; index++) {
     let k = y1.slice(0, index + 1).join("/");
     if (k === "" || k === "/") {
@@ -365,7 +365,7 @@ export const unixTimeToStr = (x: number | undefined | null, hasMs = false) => {
     return window.moment(x).toISOString(true);
   } else {
     // 1716712162574 => '2024-05-26T16:29:22+08:00'
-    return window.moment(x).format() as string;
+    return window.moment(x).format();
   }
 };
 
@@ -405,7 +405,7 @@ export const toText = (x: unknown) => {
     typeof x === "bigint" ||
     typeof x === "boolean"
   ) {
-    return `${x}`;
+    return String(x);
   }
 
   if (
@@ -417,7 +417,10 @@ export const toText = (x: unknown) => {
       typeof x.stack === "string" &&
       typeof x.message === "string")
   ) {
-    return `ERROR! MESSAGE: ${x.message}, STACK: ${x.stack}`;
+    const errLike = x as { message: string; stack: string };
+    const message = errLike.message;
+    const stack = errLike.stack;
+    return `ERROR! MESSAGE: ${message}, STACK: ${stack}`;
   }
 
   try {
@@ -427,7 +430,7 @@ export const toText = (x: unknown) => {
     }
     throw new Error("not jsonable");
   } catch {
-    return `${x}`;
+    return Object.prototype.toString.call(x);
   }
 };
 
@@ -575,7 +578,7 @@ export const changeMobileStatusBar = (
   }
 
   if (op === "enable") {
-    const callback = async (
+    const callback = (
       mutationList: MutationRecord[],
       observer: MutationObserver
     ) => {
@@ -589,14 +592,15 @@ export const changeMobileStatusBar = (
               k.classList.contains("mobile-toolbar"))
           ) {
             // have to wait, otherwise the height is not correct??
-            await delay(300);
-            const height = window
-              .getComputedStyle(k as Element)
-              .getPropertyValue("height");
+            void delay(300).then(() => {
+              const height = window
+                .getComputedStyle(k)
+                .getPropertyValue("height");
 
-            statusbar.addClass("axiom-sync-mobile-statusbar");
-            statusbar.setCssStyles({
-              marginBottom: height,
+              statusbar.addClass("axiom-sync-mobile-statusbar");
+              statusbar.setCssStyles({
+                marginBottom: height,
+              });
             });
           }
         }
@@ -621,7 +625,7 @@ export const changeMobileStatusBar = (
       statusbar.setCssStyles({
         marginBottom: height,
       });
-    } catch (e) {
+    } catch {
       // skip
     }
 
@@ -661,7 +665,9 @@ export const fixEntityListCasesInplace = (entities: { keyRaw: string }[]) => {
     const segs = e.keyRaw.split("/");
     if (e.keyRaw.endsWith("/")) {
       // folder
-      if (Object.prototype.hasOwnProperty.call(caseMapping, parentFolderLower)) {
+      if (
+        Object.prototype.hasOwnProperty.call(caseMapping, parentFolderLower)
+      ) {
         const newKeyRaw = `${caseMapping[parentFolderLower]}${segs
           .slice(-2)
           .join("/")}`;
@@ -673,7 +679,9 @@ export const fixEntityListCasesInplace = (entities: { keyRaw: string }[]) => {
       }
     } else {
       // file
-      if (Object.prototype.hasOwnProperty.call(caseMapping, parentFolderLower)) {
+      if (
+        Object.prototype.hasOwnProperty.call(caseMapping, parentFolderLower)
+      ) {
         const newKeyRaw = `${caseMapping[parentFolderLower]}${segs
           .slice(-1)
           .join("/")}`;
@@ -768,7 +776,7 @@ export const getSha1 = async (x: ArrayBuffer, stringify: "base64" | "hex") => {
   } else if (stringify === "hex") {
     return arrayBufferToHex(y);
   }
-  throw Error(`not supported stringify option = ${stringify}`);
+  throw Error(`not supported stringify option = ${String(stringify)}`);
 };
 
 /**

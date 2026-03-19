@@ -379,10 +379,13 @@ export class FakeFsBox extends FakeFs {
             .length ?? 0) > 0
         ) {
           // we find it!
-          const f = itemsInRoot.entries?.filter(
+          const foundEntry = itemsInRoot.entries?.find(
             (x) => x.name === this.remoteBaseDir
-          )[0]!;
-          this.baseDirID = f.id;
+          );
+          if (foundEntry === undefined) {
+            throw Error(`cannot find base dir entry ${this.remoteBaseDir}`);
+          }
+          this.baseDirID = foundEntry.id;
           this.vaultFolderExists = true;
           break;
         }
@@ -458,7 +461,7 @@ export class FakeFsBox extends FakeFs {
       // console.debug('enter while loop 1 of parents array');
       const children: typeof parents = [];
       for (const { id, folderPath } of parents) {
-        queue.add(async () => {
+        void queue.add(async () => {
           const filesUnderFolder = await this._walkFolder(id, folderPath);
           for (const f of filesUnderFolder) {
             allFiles.push(f);
@@ -561,7 +564,12 @@ export class FakeFsBox extends FakeFs {
     // TODO: we already have a cache, should we call again?
     const cachedEntity = this.keyToBoxEntity[key];
     const fileID = cachedEntity?.id;
-    if (cachedEntity === undefined || fileID === undefined) {
+    const parentID = cachedEntity?.parentID;
+    if (
+      cachedEntity === undefined ||
+      fileID === undefined ||
+      parentID === undefined
+    ) {
       throw Error(`no fileID found for key=${key}`);
     }
 
@@ -575,21 +583,13 @@ export class FakeFsBox extends FakeFs {
     } else {
       f = await client.files.getFileById(fileID);
     }
-    const entity = fromBoxItemToEntity(
-      f,
-      cachedEntity.parentID!,
-      cachedEntity.parentIDPath!
-    );
+    const entity = fromBoxItemToEntity(f, parentID, cachedEntity.parentIDPath);
     // insert back to cache?? to update it??
     this.keyToBoxEntity[key] = entity;
     return entity;
   }
 
-  async mkdir(
-    key: string,
-    _mtime?: number | undefined,
-    _ctime?: number | undefined
-  ): Promise<Entity> {
+  async mkdir(key: string, _mtime?: number, _ctime?: number): Promise<Entity> {
     if (!key.endsWith("/")) {
       throw Error(`you should not mkdir on key=${key}`);
     }
@@ -762,7 +762,8 @@ export class FakeFsBox extends FakeFs {
           )}`
         );
       }
-      const sessionRes2 = await sessionRes1.json<CreateUploadSessionRawResponse>();
+      const sessionRes2 =
+        await sessionRes1.json<CreateUploadSessionRawResponse>();
       // console.debug(sessionRes2);
 
       // upload by chunks
@@ -776,17 +777,20 @@ export class FakeFsBox extends FakeFs {
       for (const { start, end } of chunkRanges) {
         const subContent = content.slice(start, end + 1);
         const sha1 = await getSha1(subContent, "base64");
-        const res = await httpRequest(sessionRes2.session_endpoints.upload_part, {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${await this._getAccessToken()}`,
-            // "Content-Length": `${end - start + 1}`, // the number of bytes in the current chunk
-            "Content-Range": `bytes ${start}-${end}/${content.byteLength}`,
-            "Content-Type": "application/octet-stream",
-            digest: `sha=${sha1}`,
-          },
-          body: subContent,
-        });
+        const res = await httpRequest(
+          sessionRes2.session_endpoints.upload_part,
+          {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${await this._getAccessToken()}`,
+              // "Content-Length": `${end - start + 1}`, // the number of bytes in the current chunk
+              "Content-Range": `bytes ${start}-${end}/${content.byteLength}`,
+              "Content-Type": "application/octet-stream",
+              digest: `sha=${sha1}`,
+            },
+            body: subContent,
+          }
+        );
         if (res.status !== 200 && res.status !== 201) {
           throw Error(
             `Upload chunk for ${key}, ${start}-${end} failed! Response header=${JSON.stringify(
@@ -803,22 +807,25 @@ export class FakeFsBox extends FakeFs {
       let tries = 0;
       do {
         // console.debug(`begin commit key=${key} for tries=${tries}`)
-        const commitRes1 = await httpRequest(sessionRes2.session_endpoints.commit, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${await this._getAccessToken()}`,
+        const commitRes1 = await httpRequest(
+          sessionRes2.session_endpoints.commit,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${await this._getAccessToken()}`,
 
-            "Content-Type": "application/json",
-            digest: `sha=${sha1}`,
-          },
-          body: JSON.stringify({
-            parts: partsResult.map((p) => p.part),
-            attributes: {
-              content_modified_at: unixTimeToStr(mtime, false),
-              content_created_at: unixTimeToStr(ctime, false),
+              "Content-Type": "application/json",
+              digest: `sha=${sha1}`,
             },
-          }),
-        });
+            body: JSON.stringify({
+              parts: partsResult.map((p) => p.part),
+              attributes: {
+                content_modified_at: unixTimeToStr(mtime, false),
+                content_created_at: unixTimeToStr(ctime, false),
+              },
+            }),
+          }
+        );
         status = commitRes1.status;
         // console.debug(`status===${status} for tries=${tries},key=${key}`)
         if (status === 200 || status === 201) {
@@ -880,8 +887,8 @@ export class FakeFsBox extends FakeFs {
     return res1.arrayBuffer();
   }
 
-  async rename(_key1: string, _key2: string): Promise<void> {
-    throw new Error("Method not implemented.");
+  rename(_key1: string, _key2: string): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   async rm(key: string): Promise<void> {
@@ -919,8 +926,8 @@ export class FakeFsBox extends FakeFs {
     }
     return this.checkConnectCommonOps(callbackFunc);
   }
-  async getUserDisplayName(): Promise<string> {
-    throw new Error("Method not implemented.");
+  getUserDisplayName(): Promise<string> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   /**

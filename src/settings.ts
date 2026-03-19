@@ -6,7 +6,6 @@ import {
   Platform,
   PluginSettingTab,
   Setting,
-  requireApiVersion,
 } from "obsidian";
 import type { TextComponent } from "obsidian";
 import type {
@@ -19,8 +18,9 @@ import type {
 } from "./baseTypes";
 
 import cloneDeep from "lodash/cloneDeep";
-import { API_VER_ENSURE_REQURL_OK, VALID_REQURL } from "./baseTypesObs";
+import { VALID_REQURL } from "./baseTypesObs";
 import { messyConfigToNormal } from "./configPersist";
+import type { MessyConfigType } from "./configPersist";
 import {
   exportVaultProfilerResultsToFiles,
   exportVaultSyncPlansToFiles,
@@ -339,7 +339,7 @@ class SyncConfigDirModal extends Modal {
     this.saveDropdownFunc = saveDropdownFunc;
   }
 
-  async onOpen() {
+  onOpen() {
     const { contentEl } = this;
 
     const t = (x: TransItemType, vars?: I18nVars) => {
@@ -418,9 +418,10 @@ class ExportSettingsQrCodeModal extends Modal {
         text: t("modal_qr_button"),
       },
       (el) => {
-        el.onclick = async () => {
-          await navigator.clipboard.writeText(rawUri);
-          new Notice(t("modal_qr_button_notice"));
+        el.onclick = () => {
+          void navigator.clipboard.writeText(rawUri).then(() => {
+            new Notice(t("modal_qr_button_notice"));
+          });
         };
       }
     );
@@ -431,7 +432,7 @@ class ExportSettingsQrCodeModal extends Modal {
       {
         cls: "qrcode-img",
       },
-      async (el) => {
+      (el) => {
         el.src = imgUri;
       }
     );
@@ -515,7 +516,10 @@ const getEyesElements = () => {
 
 export const wrapTextWithPasswordHide = (text: TextComponent) => {
   const { eye, eyeOff } = getEyesElements();
-  const hider = text.inputEl.insertAdjacentElement("afterend", createSpan())!;
+  const hider = text.inputEl.insertAdjacentElement(
+    "afterend",
+    document.createElement("span")
+  )!;
   // the init type of hider is "hidden" === eyeOff === password
   hider.replaceChildren(stringToFragment(eyeOff));
   hider.addEventListener("click", () => {
@@ -704,9 +708,9 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       .addDropdown((dropdown) => {
         dropdown.addOption(
           "virtualHostedStyle",
-          "Virtual Hosted-Style (default)"
+          "Virtual hosted-style (default)"
         );
-        dropdown.addOption("pathStyle", "Path-Style");
+        dropdown.addOption("pathStyle", "Path-style");
         dropdown
           .setValue(
             this.plugin.settings.s3.forcePathStyle
@@ -1040,13 +1044,13 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("")
           .setValue(`${this.plugin.settings.password}`)
-          .onChange(async (value) => {
+          .onChange((value) => {
             newPassword = value.trim();
           });
       })
       .addButton((button) => {
         button.setButtonText(t("confirm"));
-        button.onClick(async () => {
+        button.onClick(() => {
           new PasswordModal(
             this.app,
             this.plugin,
@@ -1108,7 +1112,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
             ) {
               const intervalID = window.setInterval(() => {
                 logInfo("auto run from settings.ts");
-                this.plugin.syncRun("auto");
+                void this.plugin.syncRun("auto");
               }, realVal);
               this.plugin.autoRunIntervalID = intervalID;
               this.plugin.registerInterval(intervalID);
@@ -1570,7 +1574,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     importExportDivSetting1
       .addButton((button) => {
         button.setButtonText(t("settings_export_basic_and_advanced_button"));
-        button.onClick(async () => {
+        button.onClick(() => {
           new ExportSettingsQrCodeModal(
             this.app,
             this.plugin,
@@ -1580,7 +1584,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       })
       .addButton((button) => {
         button.setButtonText(t("settings_export_s3_button"));
-        button.onClick(async () => {
+        button.onClick(() => {
           new ExportSettingsQrCodeModal(this.app, this.plugin, "s3").open();
         });
       });
@@ -1591,7 +1595,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       .setDesc(t("settings_import_desc"))
       .addText((text) =>
         text
-          .setPlaceholder("obsidian://axiom-sync?func=settings&...")
+          .setPlaceholder("Paste Obsidian URL")
           .setValue("")
           .onChange((val) => {
             importSettingVal = val;
@@ -1618,7 +1622,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
                   this.plugin.settings,
                   copied
                 );
-                this.plugin.saveSettings();
+                await this.plugin.saveSettings();
                 new Notice(
                   t("protocol_saveqr", {
                     manifestName: this.plugin.manifest.name,
@@ -1626,7 +1630,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
                 );
               }
             } catch (e) {
-              new Notice(`${e}`);
+              new Notice(String(e));
             }
 
             importSettingVal = "";
@@ -1648,8 +1652,8 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       .setName(t("settings_debuglevel"))
       .setDesc(t("settings_debuglevel_desc"))
       .addDropdown((dropdown) => {
-        dropdown.addOption("info", "info");
-        dropdown.addOption("debug", "debug");
+        dropdown.addOption("info", "Info");
+        dropdown.addOption("debug", "Debug");
         dropdown
           .setValue(this.plugin.settings.currLogLevel ?? "info")
           .onChange(async (val: string) => {
@@ -1665,7 +1669,12 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       .addButton((button) => {
         button.setButtonText(t("settings_outputsettingsconsole_button"));
         button.onClick(async () => {
-          const c = messyConfigToNormal(await this.plugin.loadData());
+          const rawData = (await this.plugin.loadData()) as
+            | MessyConfigType
+            | import("./baseTypes").AxiomSyncPluginSettings
+            | null
+            | undefined;
+          const c = messyConfigToNormal(rawData);
           console.debug(c);
           new Notice(t("settings_outputsettingsconsole_notice"));
         });
@@ -1872,7 +1881,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       .setDesc(t("settings_outputbasepathvaultid_desc"))
       .addButton((button) => {
         button.setButtonText(t("settings_outputbasepathvaultid_button"));
-        button.onClick(async () => {
+        button.onClick(() => {
           new Notice(this.plugin.getVaultBasePath());
           new Notice(this.plugin.vaultRandomID);
         });
@@ -1883,8 +1892,8 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       .setDesc(t("settings_resetcache_desc"))
       .addButton((button) => {
         button.setButtonText(t("settings_resetcache_button"));
-        button.onClick(async () => {
-          await destroyDBs();
+        button.onClick(() => {
+          destroyDBs();
           new Notice(t("settings_resetcache_notice"));
           this.plugin.unload();
         });

@@ -179,11 +179,8 @@ const getNormPathFromBasedir = (x: string, type: "dir" | "file") => {
 
   if (type === "file") {
     return x.slice(1);
-  } else if (type === "dir") {
-    return `${x.slice(1)}/`;
-  } else {
-    throw Error(`do not know how to deal with path and type: ${x}, ${type}`);
   }
+  return `${x.slice(1)}/`;
 };
 
 const getKoofrPath = (fileOrFolderPath: string, remoteBaseDir: string) => {
@@ -457,11 +454,7 @@ export class FakeFsKoofr extends FakeFs {
     return entity;
   }
 
-  async mkdir(
-    key: string,
-    _mtime?: number | undefined,
-    _ctime?: number | undefined
-  ): Promise<Entity> {
+  async mkdir(key: string, _mtime?: number, _ctime?: number): Promise<Entity> {
     await this._init();
 
     // "abc/efg" -> "abc/"
@@ -578,12 +571,12 @@ export class FakeFsKoofr extends FakeFs {
     return await this.checkConnectCommonOps(callbackFunc);
   }
 
-  async getUserDisplayName(): Promise<string> {
-    throw new Error("Method not implemented.");
+  getUserDisplayName(): Promise<string> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async revokeAuth(): Promise<void> {
-    throw new Error("Method not implemented.");
+  revokeAuth(): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   allowEmptyFile(): boolean {
