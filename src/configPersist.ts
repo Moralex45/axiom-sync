@@ -22,18 +22,15 @@ export const messyConfigToNormal = (
   // console.debug(x);
   if (x === null || x === undefined) {
     logDebug("the messy config is null or undefined, skip");
-    return x as any;
+    return x;
   }
   if ("readme" in x && "d" in x) {
     // we should decode
-    const y = JSON.parse(
-      (
-        base64url.parse(reverseString(x["d"]), {
-          out: Buffer.allocUnsafe as any,
-          loose: true,
-        }) as Buffer
-      ).toString("utf-8")
-    );
+    const parsed = base64url.parse(reverseString(x["d"]), {
+      out: Uint8Array,
+      loose: true,
+    });
+    const y = JSON.parse(Buffer.from(parsed).toString("utf-8"));
     // console.debug("loading, parsed config is:");
     // console.debug(y);
     return y;

@@ -2,9 +2,9 @@ import cloneDeep from "lodash/cloneDeep";
 import QRCode from "qrcode";
 
 import {
+  type AxiomSyncPluginSettings,
   COMMAND_URI,
   type QRExportType,
-  type AxiomSyncPluginSettings,
   type UriParams,
 } from "./baseTypes";
 
@@ -45,7 +45,7 @@ export const exportQrCodeUri = async (
     settings2 = { azureblobstorage: cloneDeep(settings.azureblobstorage) };
   }
 
-  delete settings2.vaultRandomID;
+  Reflect.deleteProperty(settings2 as object, "vaultRandomID");
   const data = encodeURIComponent(JSON.stringify(settings2));
   const vault = encodeURIComponent(currentVaultName);
   const version = encodeURIComponent(pluginVersion);
@@ -79,7 +79,7 @@ export const parseUriByHand = (input: string) => {
 };
 
 export const importQrCodeUri = (
-  inputParams: any,
+  inputParams: UriParams | Record<string, string | undefined>,
   currentVaultName: string
 ): ProcessQrCodeResultType => {
   const params = inputParams as UriParams;
@@ -108,9 +108,9 @@ export const importQrCodeUri = (
     };
   }
 
-  let settings = {} as AxiomSyncPluginSettings;
+  let settings: AxiomSyncPluginSettings;
   try {
-    settings = JSON.parse(params.data);
+    settings = JSON.parse(params.data) as AxiomSyncPluginSettings;
   } catch (e) {
     return {
       status: "error",

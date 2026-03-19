@@ -94,7 +94,7 @@ export interface WebdavConfig {
   /**
    * @deprecated
    */
-  manualRecursive: boolean; // deprecated in 0.3.6, use depth
+  manualRecursive?: boolean; // deprecated in 0.3.6, use depth
 }
 
 export interface WebdisConfig {
@@ -272,7 +272,7 @@ export interface MixedEntity {
 
   change?: boolean;
 
-  sideNotes?: any;
+  sideNotes?: unknown;
 }
 
 /**

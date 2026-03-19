@@ -9,7 +9,7 @@ import { FakeFsTelegram } from "./fsTelegram";
 export function getClient(
   settings: AxiomSyncPluginSettings,
   vaultName: string,
-  saveUpdatedConfigFunc: () => Promise<any>
+  saveUpdatedConfigFunc: () => Promise<void>
 ): FakeFs {
   if (settings.serviceType === "telegram") {
     return new FakeFsTelegram(

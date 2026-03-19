@@ -2,6 +2,8 @@ import { nanoid } from "nanoid";
 import createClient, { type Middleware } from "openapi-fetch";
 import type { Entity } from "../../src/baseTypes";
 import { FakeFs } from "../../src/fsAll";
+import { httpRequest } from "../../src/http";
+import { logDebug, logInfo } from "../../src/log";
 import { getParentFolder } from "../../src/misc";
 import {
   COMMAND_CALLBACK_KOOFR,
@@ -11,10 +13,14 @@ import {
 } from "./baseTypesPro";
 import type { paths } from "./koofrApi";
 import type { components } from "./koofrApi";
-import { logDebug, logInfo } from "../../src/log";
 
 type FilesListRecursiveItem = components["schemas"]["FilesListRecursiveItem"];
 type FilesFile = components["schemas"]["FilesFile"];
+type KoofrEntryType = "dir" | "file";
+
+const isKoofrEntryType = (value: unknown): value is KoofrEntryType => {
+  return value === "dir" || value === "file";
+};
 
 export const DEFAULT_KOOFR_CONFIG: KoofrConfig = {
   accessToken: "",
@@ -69,7 +75,7 @@ interface AuthResFail {
 export const sendAuthReq = async (
   apiAddr: string,
   authCode: string,
-  errorCallBack: any,
+  errorCallBack: ((error: unknown) => Promise<void> | void) | undefined,
   hasCallback: boolean
 ) => {
   let callback = `urn:ietf:wg:oauth:2.0:oob`;
@@ -85,17 +91,18 @@ export const sendAuthReq = async (
       redirect_uri: callback,
     };
     // console.debug(k);
-    const resp1 = await fetch(`${apiAddr}/oauth2/token`, {
+    const resp1 = await httpRequest(`${apiAddr}/oauth2/token`, {
       method: "POST",
-      body: new URLSearchParams(k),
+      body: new URLSearchParams(k).toString(),
+      contentType: "application/x-www-form-urlencoded",
     });
 
     if (resp1.status !== 200) {
-      const resp2: AuthResFail = await resp1.json();
+      const resp2 = await resp1.json<AuthResFail>();
       throw Error(JSON.stringify(resp2));
     }
 
-    const resp2: AuthResSucc = await resp1.json();
+    const resp2 = await resp1.json<AuthResSucc>();
     return resp2;
   } catch (e) {
     console.error(e);
@@ -110,7 +117,7 @@ export const sendRefreshTokenReq = async (
   refreshToken: string
 ) => {
   logDebug(`refreshing token`);
-  const x = await fetch(`${apiAddr}/oauth2/token`, {
+  const x = await httpRequest(`${apiAddr}/oauth2/token`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -124,7 +131,7 @@ export const sendRefreshTokenReq = async (
   });
 
   if (x.status === 200) {
-    const y: AuthResSucc = await x.json();
+    const y = await x.json<AuthResSucc>();
     logDebug(`new token obtained`);
     return y;
   } else {
@@ -136,7 +143,7 @@ export const sendRefreshTokenReq = async (
 export const setConfigBySuccessfullAuthInplace = async (
   config: KoofrConfig,
   authRes: AuthResSucc,
-  saveUpdatedConfigFunc: () => Promise<any> | undefined
+  saveUpdatedConfigFunc: (() => Promise<void>) | undefined
 ) => {
   if (authRes.access_token === undefined || authRes.access_token === "") {
     throw Error(
@@ -203,7 +210,10 @@ const fromItemToEntity = (x: FilesListRecursiveItem): Entity => {
     throw Error(`cannot understand ${JSON.stringify(x)}`);
   }
 
-  const key = getNormPathFromBasedir(x.path ?? "/", x.file?.type as any);
+  if (!isKoofrEntryType(x.file?.type)) {
+    throw Error(`cannot understand ${JSON.stringify(x)}`);
+  }
+  const key = getNormPathFromBasedir(x.path ?? "/", x.file.type);
 
   if (x.file?.type === "dir" || x.file?.type === "file") {
     return {
@@ -221,7 +231,10 @@ const fromItemToEntity = (x: FilesListRecursiveItem): Entity => {
 };
 
 const fromFileToEntity = (x: FilesFile, parentPath: string): Entity => {
-  const key = getNormPathFromBasedir(`${parentPath}/${x.name}`, x.type as any);
+  if (!isKoofrEntryType(x.type)) {
+    throw Error(`cannot understand ${JSON.stringify(x)}`);
+  }
+  const key = getNormPathFromBasedir(`${parentPath}/${x.name}`, x.type);
   if (x.type === "dir" || x.type === "file") {
     return {
       key: key,
@@ -260,7 +273,7 @@ const fromFileToEntity = (x: FilesFile, parentPath: string): Entity => {
 
 const getAuthMiddleware = (
   koofrConfig: KoofrConfig,
-  saveUpdatedConfigFunc: any
+  saveUpdatedConfigFunc: () => Promise<void>
 ) => {
   const authMiddleware: Middleware = {
     async onRequest({ request }) {
@@ -303,14 +316,14 @@ export class FakeFsKoofr extends FakeFs {
   koofrConfig: KoofrConfig;
   remoteBaseDir: string;
   vaultFolderExists: boolean;
-  saveUpdatedConfigFunc: () => Promise<any>;
+  saveUpdatedConfigFunc: () => Promise<void>;
   client: ReturnType<typeof createClient<paths>>;
   placeID: string;
 
   constructor(
     koofrConfig: KoofrConfig,
     vaultName: string,
-    saveUpdatedConfigFunc: () => Promise<any>
+    saveUpdatedConfigFunc: () => Promise<void>
   ) {
     super();
     this.kind = "koofr";
@@ -495,7 +508,7 @@ export class FakeFsKoofr extends FakeFs {
           path: { mountId: this.placeID },
         },
 
-        body: content as any,
+        body: content as unknown as string,
         bodySerializer(body) {
           return body;
         },
@@ -551,7 +564,9 @@ export class FakeFsKoofr extends FakeFs {
     }
   }
 
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
+  async checkConnect(
+    callbackFunc?: (error: unknown) => void
+  ): Promise<boolean> {
     // if we can init, we can connect
     try {
       await this._init();
@@ -567,7 +582,7 @@ export class FakeFsKoofr extends FakeFs {
     throw new Error("Method not implemented.");
   }
 
-  async revokeAuth(): Promise<any> {
+  async revokeAuth(): Promise<void> {
     throw new Error("Method not implemented.");
   }
 

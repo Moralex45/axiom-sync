@@ -1,9 +1,10 @@
 import { nanoid } from "nanoid";
 import {
-  OAUTH2_FORCE_EXPIRE_MILLISECONDS,
   type AxiomSyncPluginSettings,
+  OAUTH2_FORCE_EXPIRE_MILLISECONDS,
   type SUPPORTED_SERVICES_TYPE,
 } from "../../src/baseTypes";
+import { logDebug, logInfo } from "../../src/log";
 import {
   COMMAND_CALLBACK_PRO,
   type FeatureInfo,
@@ -12,8 +13,8 @@ import {
   PRO_WEBSITE,
   type ProConfig,
 } from "./baseTypesPro";
+import { httpRequest } from "../../src/http";
 import { codeVerifier2CodeChallenge } from "./oauth2";
-import { logDebug, logInfo } from "../../src/log";
 
 const site = PRO_WEBSITE;
 logDebug(`axiom-sync official website: ${site}`);
@@ -47,8 +48,8 @@ export const generateAuthUrlAndCodeVerifierChallenge = async (
 export const sendAuthReq = async (
   verifier: string,
   authCode: string,
-  errorCallBack: any
-) => {
+  errorCallBack?: (error: unknown) => Promise<void> | void
+): Promise<AuthResError | AuthResSucc | undefined> => {
   const appKey = PRO_CLIENT_ID ?? "cli-"; // hard-code
   try {
     const k = {
@@ -60,11 +61,12 @@ export const sendAuthReq = async (
       scope: "pro.list.read",
     };
     // console.debug(k);
-    const resp1 = await fetch(`${site}/api/v1/oauth2/token`, {
+    const resp1 = await httpRequest(`${site}/api/v1/oauth2/token`, {
       method: "POST",
-      body: new URLSearchParams(k),
+      body: new URLSearchParams(k).toString(),
+      contentType: "application/x-www-form-urlencoded",
     });
-    const resp2 = await resp1.json();
+    const resp2 = await resp1.json<AuthResError | AuthResSucc>();
     return resp2;
   } catch (e) {
     console.error(e);
@@ -78,16 +80,17 @@ export const sendRefreshTokenReq = async (refreshToken: string) => {
   const appKey = PRO_CLIENT_ID ?? "cli-"; // hard-code
   try {
     logInfo("start auto getting refreshed Axiom Sync access token.");
-    const resp1 = await fetch(`${site}/api/v1/oauth2/token`, {
+    const resp1 = await httpRequest(`${site}/api/v1/oauth2/token`, {
       method: "POST",
       body: new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: refreshToken,
         client_id: appKey,
         scope: "pro.list.read",
-      }),
+      }).toString(),
+      contentType: "application/x-www-form-urlencoded",
     });
-    const resp2: AuthResError | AuthResSucc = await resp1.json();
+    const resp2 = await resp1.json<AuthResError | AuthResSucc>();
     logInfo("finish auto getting refreshed Axiom Sync access token.");
     return resp2;
   } catch (e) {
@@ -110,7 +113,7 @@ interface AuthResSucc {
 export const setConfigBySuccessfullAuthInplace = async (
   config: ProConfig,
   authRes: AuthResError | AuthResSucc,
-  saveUpdatedConfigFunc: () => Promise<any> | undefined
+  saveUpdatedConfigFunc: (() => Promise<void>) | undefined
 ) => {
   if (authRes.error !== undefined) {
     throw Error(
@@ -130,14 +133,12 @@ export const setConfigBySuccessfullAuthInplace = async (
 
   await saveUpdatedConfigFunc?.();
 
-  logInfo(
-    "finish updating local info of Axiom Sync official website token"
-  );
+  logInfo("finish updating local info of Axiom Sync official website token");
 };
 
 export const getAccessToken = async (
   config: ProConfig,
-  saveUpdatedConfigFunc: () => Promise<any> | undefined
+  saveUpdatedConfigFunc: (() => Promise<void>) | undefined
 ) => {
   const ts = Date.now();
   if (
@@ -172,20 +173,20 @@ export const getAccessToken = async (
 export const getAndSaveProFeatures = async (
   config: ProConfig,
   pluginVersion: string,
-  saveUpdatedConfigFunc: () => Promise<any> | undefined
+  saveUpdatedConfigFunc: (() => Promise<void>) | undefined
 ) => {
   const access = await getAccessToken(config, saveUpdatedConfigFunc);
 
-  const resp1 = await fetch(`${site}/api/v1/pro/list`, {
+  const resp1 = await httpRequest(`${site}/api/v1/pro/list`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${access}`,
       "AXIOM-SYNC-API-Plugin-Ver": pluginVersion,
     },
   });
-  const rsp2: {
+  const rsp2 = await resp1.json<{
     proFeatures: FeatureInfo[];
-  } = await resp1.json();
+  }>();
 
   config.enabledProFeatures = rsp2.proFeatures;
   await saveUpdatedConfigFunc?.();
@@ -195,20 +196,20 @@ export const getAndSaveProFeatures = async (
 export const getAndSaveProEmail = async (
   config: ProConfig,
   pluginVersion: string,
-  saveUpdatedConfigFunc: () => Promise<any> | undefined
+  saveUpdatedConfigFunc: (() => Promise<void>) | undefined
 ) => {
   const access = await getAccessToken(config, saveUpdatedConfigFunc);
 
-  const resp1 = await fetch(`${site}/api/v1/profile/list`, {
+  const resp1 = await httpRequest(`${site}/api/v1/profile/list`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${access}`,
       "AXIOM-SYNC-API-Plugin-Ver": pluginVersion,
     },
   });
-  const rsp2: {
+  const rsp2 = await resp1.json<{
     email: string;
-  } = await resp1.json();
+  }>();
 
   config.email = rsp2.email;
   await saveUpdatedConfigFunc?.();
@@ -222,7 +223,7 @@ export const getAndSaveProEmail = async (
 export const checkProRunnableAndFixInplace = async (
   config: AxiomSyncPluginSettings,
   pluginVersion: string,
-  saveUpdatedConfigFunc: () => Promise<any> | undefined
+  saveUpdatedConfigFunc: (() => Promise<void>) | undefined
 ): Promise<true> => {
   logDebug(`checkProRunnableAndFixInplace`);
 

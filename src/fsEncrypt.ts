@@ -399,11 +399,13 @@ export class FakeFsEncrypt extends FakeFs {
     return await this.innerFs.rm(keyEnc);
   }
 
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
-    return await this.innerFs.checkConnect(callbackFunc);
+  checkConnect(
+    callbackFunc?: (error: unknown) => void
+  ): Promise<boolean> {
+    return this.innerFs.checkConnect(callbackFunc);
   }
 
-  async closeResources() {
+  closeResources() {
     if (this.method === "rclone-base64" && this.cipherRClone !== undefined) {
       this.cipherRClone.closeResources();
     }
@@ -577,7 +579,7 @@ export class FakeFsEncrypt extends FakeFs {
     return await this.innerFs.getUserDisplayName();
   }
 
-  async revokeAuth(): Promise<any> {
+  async revokeAuth(): Promise<void> {
     return await this.innerFs.revokeAuth();
   }
 

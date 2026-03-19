@@ -19,6 +19,8 @@ import type { FileFullOrFolderMiniOrWebLink } from "box-typescript-sdk-gen/lib/s
 import type { FolderFull } from "box-typescript-sdk-gen/lib/schemas/folderFull.generated";
 import type { Items } from "box-typescript-sdk-gen/lib/schemas/items.generated";
 import PQueue from "p-queue";
+import { httpRequest } from "../../src/http";
+import { logDebug, logInfo } from "../../src/log";
 import {
   delay,
   getFolderLevels,
@@ -26,7 +28,6 @@ import {
   splitFileSizeToChunkRanges,
   unixTimeToStr,
 } from "../../src/misc";
-import { logDebug, logInfo } from "../../src/log";
 
 export const DEFAULT_BOX_CONFIG: BoxConfig = {
   accessToken: "",
@@ -55,7 +56,16 @@ export const generateAuthUrl = () => {
 /**
  * https://developer.box.com/guides/authentication/oauth2/without-sdk/
  */
-export const sendAuthReq = async (authCode: string, errorCallBack: any) => {
+interface BoxAuthRes {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+}
+
+export const sendAuthReq = async (
+  authCode: string,
+  errorCallBack?: (error: unknown) => Promise<void> | void
+) => {
   try {
     const k = {
       code: authCode,
@@ -65,11 +75,12 @@ export const sendAuthReq = async (authCode: string, errorCallBack: any) => {
       // redirect_uri: `obsidian://${COMMAND_CALLBACK_BOX}`,
     };
     // console.debug(k);
-    const resp1 = await fetch(`https://api.box.com/oauth2/token`, {
+    const resp1 = await httpRequest(`https://api.box.com/oauth2/token`, {
       method: "POST",
-      body: new URLSearchParams(k),
+      body: new URLSearchParams(k).toString(),
+      contentType: "application/x-www-form-urlencoded",
     });
-    const resp2 = await resp1.json();
+    const resp2 = await resp1.json<BoxAuthRes>();
     return resp2;
   } catch (e) {
     console.error(e);
@@ -84,7 +95,7 @@ export const sendAuthReq = async (authCode: string, errorCallBack: any) => {
  */
 export const sendRefreshTokenReq = async (refreshToken: string) => {
   logDebug(`refreshing token`);
-  const x = await fetch("https://api.box.com/oauth2/token", {
+  const x = await httpRequest("https://api.box.com/oauth2/token", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -98,7 +109,7 @@ export const sendRefreshTokenReq = async (refreshToken: string) => {
   });
 
   if (x.status === 200) {
-    const y = await x.json();
+    const y = await x.json<BoxAuthRes>();
     logDebug(`new token obtained`);
     return y;
   } else {
@@ -108,8 +119,8 @@ export const sendRefreshTokenReq = async (refreshToken: string) => {
 
 export const setConfigBySuccessfullAuthInplace = async (
   config: BoxConfig,
-  authRes: any,
-  saveUpdatedConfigFunc: () => Promise<any> | undefined
+  authRes: BoxAuthRes,
+  saveUpdatedConfigFunc: (() => Promise<void>) | undefined
 ) => {
   if (authRes.access_token === undefined || authRes.access_token === "") {
     throw Error(
@@ -235,7 +246,15 @@ const fromBoxItemToEntity = (
 };
 
 const fromRawResponseToEntity = (
-  boxItem: any,
+  boxItem: {
+    id: string;
+    name?: string;
+    type: "file" | "folder" | "web_link";
+    content_modified_at?: string;
+    modified_at?: string;
+    size?: number;
+    sha1?: string;
+  },
   parentID: string,
   parentFolderPath: string | undefined /* for bfs */
 ): BoxEntity => {
@@ -281,7 +300,7 @@ const fromRawResponseToEntity = (
     mtimeSvr: mtime,
     id: boxItem.id,
     parentID: parentID,
-    isFolder: false,
+    isFolder: boxItem.type === "folder",
     size: boxItem.size ?? 0,
     sizeRaw: boxItem.size ?? 0,
     hash: boxItem.sha1 ?? undefined,
@@ -295,7 +314,7 @@ export class FakeFsBox extends FakeFs {
   boxConfig: BoxConfig;
   remoteBaseDir: string;
   vaultFolderExists: boolean;
-  saveUpdatedConfigFunc: () => Promise<any>;
+  saveUpdatedConfigFunc: () => Promise<void>;
 
   keyToBoxEntity: Record<string, BoxEntity>;
 
@@ -304,7 +323,7 @@ export class FakeFsBox extends FakeFs {
   constructor(
     boxConfig: BoxConfig,
     vaultName: string,
-    saveUpdatedConfigFunc: () => Promise<any>
+    saveUpdatedConfigFunc: () => Promise<void>
   ) {
     super();
     this.kind = "box";
@@ -686,7 +705,7 @@ export class FakeFsBox extends FakeFs {
         url = `https://upload.box.com/api/2.0/files/${prevFileID}/content`;
       }
 
-      const res = await fetch(url, {
+      const res = await httpRequest(url, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${await this._getAccessToken()}`,
@@ -700,7 +719,7 @@ export class FakeFsBox extends FakeFs {
         );
       }
 
-      const res2 = await res.json();
+      const res2 = await res.json<{ entries?: FileFull[] }>();
       if (res2.entries === undefined) {
         throw Error(`upload small file ${key} failed!`);
       }
@@ -724,7 +743,7 @@ export class FakeFsBox extends FakeFs {
         url = `https://upload.box.com/api/2.0/files/${prevFileID}/upload_sessions`;
       }
 
-      const sessionRes1 = await fetch(url, {
+      const sessionRes1 = await httpRequest(url, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${await this._getAccessToken()}`,
@@ -743,8 +762,7 @@ export class FakeFsBox extends FakeFs {
           )}`
         );
       }
-      const sessionRes2: CreateUploadSessionRawResponse =
-        await sessionRes1.json();
+      const sessionRes2 = await sessionRes1.json<CreateUploadSessionRawResponse>();
       // console.debug(sessionRes2);
 
       // upload by chunks
@@ -758,7 +776,7 @@ export class FakeFsBox extends FakeFs {
       for (const { start, end } of chunkRanges) {
         const subContent = content.slice(start, end + 1);
         const sha1 = await getSha1(subContent, "base64");
-        const res = await fetch(sessionRes2.session_endpoints.upload_part, {
+        const res = await httpRequest(sessionRes2.session_endpoints.upload_part, {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${await this._getAccessToken()}`,
@@ -777,7 +795,7 @@ export class FakeFsBox extends FakeFs {
           );
         }
 
-        partsResult.push((await res.json()) as UploadChunkRawResponse);
+        partsResult.push(await res.json<UploadChunkRawResponse>());
       }
       // commit?
       const sha1 = await getSha1(content, "base64");
@@ -785,7 +803,7 @@ export class FakeFsBox extends FakeFs {
       let tries = 0;
       do {
         // console.debug(`begin commit key=${key} for tries=${tries}`)
-        const commitRes1 = await fetch(sessionRes2.session_endpoints.commit, {
+        const commitRes1 = await httpRequest(sessionRes2.session_endpoints.commit, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${await this._getAccessToken()}`,
@@ -804,7 +822,7 @@ export class FakeFsBox extends FakeFs {
         status = commitRes1.status;
         // console.debug(`status===${status} for tries=${tries},key=${key}`)
         if (status === 200 || status === 201) {
-          const commitRes2 = await commitRes1.json();
+          const commitRes2 = await commitRes1.json<{ entries?: FileFull[] }>();
           if (commitRes2.entries === undefined) {
             throw Error(`Upload big file ${key} failed!`);
           }
@@ -843,7 +861,7 @@ export class FakeFsBox extends FakeFs {
       throw Error(`no fileID found for key=${key}`);
     }
 
-    const res1 = await fetch(
+    const res1 = await httpRequest(
       `https://api.box.com/2.0/files/${fileID}/content`,
       {
         method: "GET",
@@ -859,8 +877,7 @@ export class FakeFsBox extends FakeFs {
         )}`
       );
     }
-    const res2 = await res1.arrayBuffer();
-    return res2;
+    return res1.arrayBuffer();
   }
 
   async rename(_key1: string, _key2: string): Promise<void> {
@@ -889,7 +906,9 @@ export class FakeFsBox extends FakeFs {
     }
   }
 
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
+  async checkConnect(
+    callbackFunc?: (error: unknown) => void
+  ): Promise<boolean> {
     // if we can init, we can connect
     try {
       await this._init();
@@ -898,7 +917,7 @@ export class FakeFsBox extends FakeFs {
       callbackFunc?.(err);
       return false;
     }
-    return await this.checkConnectCommonOps(callbackFunc);
+    return this.checkConnectCommonOps(callbackFunc);
   }
   async getUserDisplayName(): Promise<string> {
     throw new Error("Method not implemented.");
@@ -907,8 +926,8 @@ export class FakeFsBox extends FakeFs {
   /**
    * https://developer.box.com/guides/authentication/tokens/revoke/
    */
-  async revokeAuth(): Promise<any> {
-    await fetch(`https://api.box.com/oauth2/revoke`, {
+  async revokeAuth(): Promise<void> {
+    await httpRequest(`https://api.box.com/oauth2/revoke`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -918,6 +937,7 @@ export class FakeFsBox extends FakeFs {
         client_secret: BOX_CLIENT_SECRET ?? "",
         token: this.boxConfig.refreshToken,
       }).toString(),
+      contentType: "application/x-www-form-urlencoded",
     });
   }
 

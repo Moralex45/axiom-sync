@@ -10,6 +10,10 @@ const LANGS = merge(LANGS_BASIC, LANGS_PRO);
 export type LangType = keyof typeof LANGS;
 export type LangTypeAndAuto = LangType | "auto";
 export type TransItemType = keyof (typeof LANGS)["en"];
+type TemplateVars = Record<
+  string,
+  string | number | boolean | null | undefined
+>;
 
 export class I18n {
   lang: LangTypeAndAuto;
@@ -45,10 +49,13 @@ export class I18n {
     return res;
   }
 
-  t(key: TransItemType, vars?: Record<string, string>) {
+  t(key: TransItemType, vars?: TemplateVars) {
     if (vars === undefined) {
       return this._get(key);
     }
-    return Mustache.render(this._get(key), vars);
+    const normalizedVars = Object.fromEntries(
+      Object.entries(vars).map(([key, value]) => [key, value == null ? "" : `${value}`])
+    );
+    return Mustache.render(this._get(key), normalizedVars);
   }
 }

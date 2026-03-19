@@ -18,6 +18,11 @@ import { FakeFs } from "./fsAll";
 import { logDebug, logInfo } from "./log";
 import { bufferToArrayBuffer, delay, splitFileSizeToChunkRanges } from "./misc";
 
+type UploadProgress = {
+  loaded: number;
+  total?: number;
+};
+
 /**
  * https://stackoverflow.com/questions/32850898/how-to-check-if-a-string-has-any-non-iso-8859-1-characters-with-javascript
  * @param str
@@ -148,7 +153,6 @@ export const DEFAULT_WEBDAV_CONFIG = {
   username: "",
   password: "",
   authType: "basic",
-  manualRecursive: true,
   depth: "manual_1",
   remoteBaseDir: "",
 } as WebdavConfig;
@@ -226,7 +230,9 @@ const tryEncodeUsernamePassword = (x: string) => {
   if (onlyAscii(x)) {
     return x;
   }
-  return unescape(encodeURIComponent(x));
+  return encodeURIComponent(x).replace(/%([0-9A-F]{2})/g, (_, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16))
+  );
 };
 
 const parseCustomHeaders = (x: string): Record<string, string> => {
@@ -259,7 +265,7 @@ export class FakeFsWebdav extends FakeFs {
   remoteBaseDir: string;
   client!: WebDAVClient;
   vaultFolderExists: boolean;
-  saveUpdatedConfigFunc: () => Promise<any>;
+  saveUpdatedConfigFunc: () => Promise<void>;
 
   supportApachePartial: boolean;
   supportSabrePartial: boolean;
@@ -269,7 +275,7 @@ export class FakeFsWebdav extends FakeFs {
   constructor(
     webdavConfig: WebdavConfig,
     vaultName: string,
-    saveUpdatedConfigFunc: () => Promise<any>
+    saveUpdatedConfigFunc: () => Promise<void>
   ) {
     super();
     this.kind = "webdav";
@@ -343,7 +349,6 @@ export class FakeFsWebdav extends FakeFs {
       this.webdavConfig.depth === "auto_unknown"
     ) {
       this.webdavConfig.depth = "manual_1";
-      this.webdavConfig.manualRecursive = true;
       if (this.saveUpdatedConfigFunc !== undefined) {
         await this.saveUpdatedConfigFunc();
         logInfo(
@@ -678,7 +683,7 @@ export class FakeFsWebdav extends FakeFs {
     // console.debug(`start _writeFileFromRootFull`);
     await this.client.putFileContents(key, content, {
       overwrite: true,
-      onUploadProgress: (progress: any) => {
+      onUploadProgress: (progress: UploadProgress) => {
         logDebug(`Uploaded ${progress.loaded} bytes of ${progress.total}`);
       },
     });
@@ -925,7 +930,9 @@ export class FakeFsWebdav extends FakeFs {
     }
   }
 
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
+  async checkConnect(
+    callbackFunc?: (error: unknown) => void
+  ): Promise<boolean> {
     if (
       !(
         this.webdavConfig.address.startsWith("http://") ||
@@ -960,7 +967,7 @@ export class FakeFsWebdav extends FakeFs {
     throw new Error("Method not implemented.");
   }
 
-  async revokeAuth() {
+  async revokeAuth(): Promise<void> {
     throw new Error("Method not implemented.");
   }
 

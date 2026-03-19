@@ -27,8 +27,8 @@ import { Platform, type RequestUrlParam, requestUrl } from "obsidian";
 import PQueue from "p-queue";
 import { DEFAULT_CONTENT_TYPE, type S3Config } from "./baseTypes";
 import { VALID_REQURL } from "./baseTypesObs";
-import { bufferToArrayBuffer, getFolderLevels } from "./misc";
 import { logDebug } from "./log";
+import { bufferToArrayBuffer, getFolderLevels } from "./misc";
 
 import type { Entity } from "./baseTypes";
 import { FakeFs } from "./fsAll";
@@ -108,7 +108,10 @@ class ObsHttpHandler extends FetchHttpHandler {
       contentType = transformedHeaders["content-type"];
     }
 
-    let transformedBody: any = body;
+    let transformedBody: string | ArrayBuffer | undefined = body as
+      | string
+      | ArrayBuffer
+      | undefined;
     if (ArrayBuffer.isView(body)) {
       transformedBody = bufferToArrayBuffer(body);
     }
@@ -187,7 +190,6 @@ export const DEFAULT_S3_CONFIG: S3Config = {
   s3AccessKeyID: "",
   s3SecretAccessKey: "",
   s3BucketName: "",
-  bypassCorsLocally: true,
   partsConcurrency: 20,
   forcePathStyle: false,
   remotePrefix: "",
@@ -232,7 +234,12 @@ const getS3Client = (s3Config: S3Config) => {
   }
 
   let s3Client: S3Client;
-  if (VALID_REQURL && s3Config.bypassCorsLocally) {
+  const useBypassCorsLocally =
+    Reflect.get(
+      s3Config as unknown as Record<string, unknown>,
+      "bypassCorsLocally"
+    ) !== false;
+  if (VALID_REQURL && useBypassCorsLocally) {
     s3Client = new S3Client({
       region: s3Config.s3Region,
       endpoint: endpoint,
@@ -260,7 +267,10 @@ const getS3Client = (s3Config: S3Config) => {
 
   s3Client.middlewareStack.add(
     (next, context) => (args) => {
-      (args.request as any).headers["cache-control"] = "no-cache";
+      const requestWithHeaders = args.request as {
+        headers: Record<string, string>;
+      };
+      requestWithHeaders.headers["cache-control"] = "no-cache";
       return next(args);
     },
     {
@@ -818,7 +828,9 @@ export class FakeFsS3 extends FakeFs {
     // (await this._walkFromRoot(remoteFileName)).map(...)
   }
 
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
+  async checkConnect(
+    callbackFunc?: (error: unknown) => void
+  ): Promise<boolean> {
     try {
       // const results = await this.s3Client.send(
       //   new HeadBucketCommand({ Bucket: this.s3Config.s3BucketName })
@@ -841,12 +853,14 @@ export class FakeFsS3 extends FakeFs {
       if (results.$metadata.httpStatusCode !== 200) {
         throw Error(`not 200 httpStatusCode`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       logDebug(err);
       if (callbackFunc !== undefined) {
-        if (this.s3Config.s3Endpoint.contains(this.s3Config.s3BucketName)) {
+        if (this.s3Config.s3Endpoint.includes(this.s3Config.s3BucketName)) {
+          const originalError =
+            err instanceof Error ? err : new Error(String(err));
           const err2 = createAggregateError([
-            err,
+            originalError,
             new Error(
               "Maybe you've included the bucket name inside the endpoint setting. Please remove the bucket name and try again."
             ),

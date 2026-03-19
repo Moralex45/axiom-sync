@@ -311,7 +311,9 @@ export class FakeFsAzureBlobStorage extends FakeFs {
     }
   }
 
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
+  async checkConnect(
+    callbackFunc?: (error: unknown) => void
+  ): Promise<boolean> {
     // if we can walk, we can connect
     try {
       await this.walkPartial();
@@ -327,7 +329,7 @@ export class FakeFsAzureBlobStorage extends FakeFs {
     throw new Error("Method not implemented.");
   }
 
-  async revokeAuth(): Promise<any> {
+  async revokeAuth(): Promise<void> {
     throw new Error("Method not implemented.");
   }
 

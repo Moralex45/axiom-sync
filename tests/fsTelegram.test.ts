@@ -1,9 +1,6 @@
 import { strict as assert } from "assert";
 import type { TelegramConfig } from "../src/baseTypes";
-import {
-  DEFAULT_TELEGRAM_CONFIG,
-  FakeFsTelegram,
-} from "../src/fsTelegram";
+import { DEFAULT_TELEGRAM_CONFIG, FakeFsTelegram } from "../src/fsTelegram";
 
 interface StoredMessage {
   messageId: number;

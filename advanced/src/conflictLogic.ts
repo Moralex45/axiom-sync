@@ -5,10 +5,7 @@ import isEqual from "lodash/isEqual";
 //   stringifyPatches,
 //   parsePatch,
 // } from "@sanity/diff-match-patch";
-import {
-  LCS,
-  mergeDigIn,
-} from "node-diff3";
+import { LCS, mergeDigIn } from "node-diff3";
 import type { Entity } from "../../src/baseTypes";
 import { copyFile } from "../../src/copyLogic";
 import type { FakeFs } from "../../src/fsAll";
@@ -51,15 +48,16 @@ function mergeDigInModified(a: string, o: string, b: string) {
 function getLCSText(a: string, b: string) {
   const aa = a.split("\n");
   const bb = b.split("\n");
-  let raw = LCS(aa, bb);
-
+  type LcsChainNode = {
+    buffer1index: number;
+    chain?: LcsChainNode | null;
+  };
   const k: string[] = [];
-
-  do {
+  let raw = LCS(aa, bb) as LcsChainNode | null;
+  while (raw !== null && raw.buffer1index !== -1) {
     k.unshift(aa[raw.buffer1index]);
-
-    raw = raw.chain as any;
-  } while (raw !== null && raw !== undefined && raw.buffer1index !== -1);
+    raw = raw.chain ?? null;
+  }
 
   return k.join("\n");
 }
@@ -240,8 +238,8 @@ async function tryDuplicateFileForSameSizes(
   key2: string,
   fsLocal: FakeFs,
   fsRemote: FakeFs,
-  uploadCallback: (entity: Entity | undefined) => Promise<any>,
-  downloadCallback: (entity: Entity | undefined) => Promise<any>
+  uploadCallback: (entity: Entity | undefined) => Promise<void>,
+  downloadCallback: (entity: Entity | undefined) => Promise<void>
 ) {
   logDebug(`tryDuplicateFileForSameSizes: ${key}`);
 
@@ -303,8 +301,8 @@ async function tryDuplicateFileForDiffSizes(
   key2: string,
   fsLocal: FakeFs,
   fsRemote: FakeFs,
-  uploadCallback: (entity: Entity | undefined) => Promise<any>,
-  downloadCallback: (entity: Entity | undefined) => Promise<any>
+  uploadCallback: (entity: Entity | undefined) => Promise<void>,
+  downloadCallback: (entity: Entity | undefined) => Promise<void>
 ) {
   logDebug(`tryDuplicateFileForDiffSizes: ${key}`);
 
@@ -340,8 +338,8 @@ export async function tryDuplicateFile(
   key: string,
   fsLocal: FakeFs,
   fsRemote: FakeFs,
-  uploadCallback: (entity: Entity | undefined) => Promise<any>,
-  downloadCallback: (entity: Entity | undefined) => Promise<any>
+  uploadCallback: (entity: Entity | undefined) => Promise<void>,
+  downloadCallback: (entity: Entity | undefined) => Promise<void>
 ) {
   let key2 = getFileRenameForDup(key);
   let usable = false;

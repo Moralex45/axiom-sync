@@ -10,7 +10,7 @@ interface RecvMsg {
   status: "ok" | "error";
   outputName?: string;
   outputContent?: ArrayBuffer;
-  error?: any;
+  error?: unknown;
 }
 
 const getWorkerErrorMessage = (op: string, err: unknown) => {
@@ -54,7 +54,7 @@ export class CipherRclone {
     // console.debug("begin creating EncryptWorker");
     this.workers = [];
     for (let i = 0; i < workerNum; ++i) {
-      this.workers.push(new (EncryptWorker as any)() as Worker);
+      this.workers.push(new (EncryptWorker as new () => Worker)());
     }
 
     // console.debug("finish creating EncryptWorker");
@@ -215,7 +215,9 @@ export class CipherRclone {
         }
         if (outputContent === undefined) {
           reject(
-            new Error("encryptContentByCallingWorker: outputContent is undefined")
+            new Error(
+              "encryptContentByCallingWorker: outputContent is undefined"
+            )
           );
         } else {
           resolve(outputContent);
@@ -261,7 +263,9 @@ export class CipherRclone {
         } else {
           if (outputContent === undefined) {
             reject(
-              new Error("decryptContentByCallingWorker: outputContent is undefined")
+              new Error(
+                "decryptContentByCallingWorker: outputContent is undefined"
+              )
             );
           } else {
             resolve(outputContent);

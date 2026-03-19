@@ -180,6 +180,10 @@
   display: grid;
 }
 
+.axiom-sync-settings-wrap {
+  overflow-wrap: break-word;
+}
+
 .pro-disclaimer {
   font-weight: bold;
 }
@@ -205,4 +209,8 @@
 .syncalgov3-lang-switch {
   display: flex;
   gap: 6px;
+}
+
+.axiom-sync-mobile-statusbar {
+  display: flex;
 }

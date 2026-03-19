@@ -1,5 +1,5 @@
 import { DEFAULT_DEBUG_FOLDER, type Entity } from "./baseTypes";
-import { FakeFs } from "./fsAll";
+import { type ErrorCallback, FakeFs } from "./fsAll";
 
 import { TFile, TFolder, type Vault } from "obsidian";
 import { mkdirpInVault, statFix, unixTimeToStr } from "./misc";
@@ -85,7 +85,7 @@ export class FakeFsLocal extends FakeFs {
           sizeRaw: 0,
         };
       } else {
-        throw Error(`unexpected ${entry}`);
+        throw Error(`unexpected local entry ${entry.path}`);
       }
 
       if (r.keyRaw.startsWith(DEFAULT_DEBUG_FOLDER)) {
@@ -120,8 +120,8 @@ export class FakeFsLocal extends FakeFs {
     return local;
   }
 
-  async walkPartial(): Promise<Entity[]> {
-    return await this.walk();
+  walkPartial(): Promise<Entity[]> {
+    return this.walk();
   }
 
   async stat(key: string): Promise<Entity> {
@@ -181,16 +181,16 @@ export class FakeFsLocal extends FakeFs {
       }
     }
   }
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
-    return true;
+  checkConnect(_callbackFunc?: ErrorCallback): Promise<boolean> {
+    return Promise.resolve(true);
   }
 
-  async getUserDisplayName(): Promise<string> {
-    throw new Error("Method not implemented.");
+  getUserDisplayName(): Promise<string> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async revokeAuth(): Promise<any> {
-    throw new Error("Method not implemented.");
+  revokeAuth(): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   allowEmptyFile(): boolean {

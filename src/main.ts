@@ -16,24 +16,17 @@ import {
   requireApiVersion,
   setIcon,
 } from "obsidian";
-import {
-  DEFAULT_PRO_CONFIG,
-} from "../advanced/src/account";
+import { DEFAULT_PRO_CONFIG } from "../advanced/src/account";
 import { DEFAULT_AZUREBLOBSTORAGE_CONFIG } from "../advanced/src/fsAzureBlobStorage";
 import { DEFAULT_BOX_CONFIG } from "../advanced/src/fsBox";
 import { DEFAULT_KOOFR_CONFIG } from "../advanced/src/fsKoofr";
-import {
-  DEFAULT_PCLOUD_CONFIG,
-} from "../advanced/src/fsPCloud";
+import { DEFAULT_PCLOUD_CONFIG } from "../advanced/src/fsPCloud";
 import { syncer } from "../advanced/src/sync";
 import type {
   AxiomSyncPluginSettings,
   SyncTriggerSourceType,
 } from "./baseTypes";
-import {
-  COMMAND_CALLBACK,
-  COMMAND_URI,
-} from "./baseTypes";
+import { COMMAND_CALLBACK, COMMAND_URI } from "./baseTypes";
 import { API_VER_ENSURE_REQURL_OK } from "./baseTypesObs";
 import { messyConfigToNormal, normalConfigToMessy } from "./configPersist";
 import { exportVaultSyncPlansToFiles } from "./debugMode";
@@ -63,6 +56,8 @@ import { changeMobileStatusBar } from "./misc";
 import { DEFAULT_PROFILER_CONFIG, Profiler } from "./profiler";
 import { AxiomSyncSettingTab } from "./settings";
 import { SyncAlgoV3Modal } from "./syncAlgoV3Notice";
+
+type I18nVars = Record<string, string | number | boolean | null | undefined>;
 
 const DEFAULT_SETTINGS: AxiomSyncPluginSettings = {
   s3: DEFAULT_S3_CONFIG,
@@ -117,6 +112,7 @@ const iconNameSyncRunning = `axiom-sync-sync-running`;
 const iconNameLogs = `axiom-sync-logs`;
 
 const getIconSvg = () => {
+  const serializer = new XMLSerializer();
   const iconSvgSyncWait = createElement(RotateCcw);
   iconSvgSyncWait.setAttribute("width", "100");
   iconSvgSyncWait.setAttribute("height", "100");
@@ -127,9 +123,9 @@ const getIconSvg = () => {
   iconSvgLogs.setAttribute("width", "100");
   iconSvgLogs.setAttribute("height", "100");
   const res = {
-    iconSvgSyncWait: iconSvgSyncWait.outerHTML,
-    iconSvgSyncRunning: iconSvgSyncRunning.outerHTML,
-    iconSvgLogs: iconSvgLogs.outerHTML,
+    iconSvgSyncWait: serializer.serializeToString(iconSvgSyncWait),
+    iconSvgSyncRunning: serializer.serializeToString(iconSvgSyncRunning),
+    iconSvgLogs: serializer.serializeToString(iconSvgLogs),
   };
 
   iconSvgSyncWait.empty();
@@ -139,7 +135,7 @@ const getIconSvg = () => {
 };
 
 const getStatusBarShortMsgFromSyncSource = (
-  t: (x: TransItemType, vars?: any) => string,
+  t: (x: TransItemType, vars?: I18nVars) => string,
   s: SyncTriggerSourceType | undefined
 ) => {
   if (s === undefined) {
@@ -239,10 +235,8 @@ export default class AxiomSyncPlugin extends Plugin {
       profiler,
       this.settings.deleteToWhere ?? "system"
     );
-    const fsRemote = getClient(
-      this.settings,
-      this.app.vault.getName(),
-      async () => await this.saveSettings()
+    const fsRemote = getClient(this.settings, this.app.vault.getName(), () =>
+      this.saveSettings()
     );
     const fsEncrypt = new FakeFsEncrypt(
       fsRemote,
@@ -250,7 +244,7 @@ export default class AxiomSyncPlugin extends Plugin {
       this.settings.encryptionMethod ?? "rclone-base64"
     );
 
-    const t = (x: TransItemType, vars?: any) => {
+    const t = (x: TransItemType, vars?: I18nVars) => {
       return this.i18n.t(x, vars);
     };
 
@@ -285,7 +279,7 @@ export default class AxiomSyncPlugin extends Plugin {
 
     let syncHadError = false;
 
-    const notifyFunc = async (s: SyncTriggerSourceType, step: number) => {
+    const notifyFunc = (s: SyncTriggerSourceType, step: number) => {
       switch (step) {
         case 0:
           if (s === "dry") {
@@ -386,20 +380,24 @@ export default class AxiomSyncPlugin extends Plugin {
         default:
           throw Error(`unknown step=${step} for showing notice`);
       }
+      return Promise.resolve();
     };
 
-    const errNotifyFunc = async (s: SyncTriggerSourceType, error: Error) => {
+    const errNotifyFunc = (s: SyncTriggerSourceType, error: Error) => {
       syncHadError = true;
       console.error(error);
       let shown = false;
       try {
-        const errs = (error as any)?.errors;
+        const aggregateError = error as Error & {
+          errors?: Iterable<unknown> | unknown[];
+        };
+        const errs = aggregateError.errors;
         const isAggregateLike =
           Array.isArray(errs) ||
           (errs !== undefined && typeof errs?.[Symbol.iterator] === "function");
         if (isAggregateLike) {
-          for (const e of errs as Iterable<any>) {
-            const msg = (e as any)?.message ?? `${e}`;
+          for (const e of errs as Iterable<unknown>) {
+            const msg = e instanceof Error ? e.message : String(e);
             getNotice(s, msg, 10 * 1000);
             shown = true;
           }
@@ -407,15 +405,16 @@ export default class AxiomSyncPlugin extends Plugin {
           getNotice(s, error?.message ?? "error while sync", 10 * 1000);
           shown = true;
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(e);
       }
       if (!shown) {
         getNotice(s, error?.message ?? "error while sync", 10 * 1000);
       }
+      return Promise.resolve();
     };
 
-    const ribboonFunc = async (s: SyncTriggerSourceType, step: number) => {
+    const ribboonFunc = (s: SyncTriggerSourceType, step: number) => {
       if (step === 1) {
         if (this.syncRibbon !== undefined) {
           setIcon(this.syncRibbon, iconNameSyncRunning);
@@ -435,6 +434,7 @@ export default class AxiomSyncPlugin extends Plugin {
           this.syncRibbon.setAttribute("aria-label", originLabel);
         }
       }
+      return Promise.resolve();
     };
 
     const statusBarFunc = async (
@@ -456,11 +456,12 @@ export default class AxiomSyncPlugin extends Plugin {
       }
     };
 
-    const markIsSyncingFunc = async (isSyncing: boolean) => {
+    const markIsSyncingFunc = (isSyncing: boolean) => {
       this.isSyncing = isSyncing;
+      return Promise.resolve();
     };
 
-    const callbackSyncProcess = async (
+    const callbackSyncProcess = (
       s: SyncTriggerSourceType,
       realCounter: number,
       realTotalCount: number,
@@ -476,6 +477,7 @@ export default class AxiomSyncPlugin extends Plugin {
         decision,
         triggerSource
       );
+      return Promise.resolve();
     };
 
     if (this.isSyncing) {
@@ -494,7 +496,7 @@ export default class AxiomSyncPlugin extends Plugin {
       return;
     }
 
-    const configSaver = async () => await this.saveSettings();
+    const configSaver = () => this.saveSettings();
 
     await syncer(
       fsLocal,
@@ -546,11 +548,9 @@ export default class AxiomSyncPlugin extends Plugin {
     this.syncEvent = new Events();
 
     await this.loadSettings();
+    globalThis.__axiomSyncRequestUrl = requestUrl;
     configureLogging(this.settings.currLogLevel);
     logInfo(`loading plugin ${this.manifest.id}`);
-
-    // Make Obsidian requestUrl accessible to adapters instantiated outside this module.
-    (globalThis as any).__axiomSyncRequestUrl = requestUrl;
 
     // MUST after loadSettings and before prepareDB
     const profileID: string = this.getCurrProfileID();
@@ -560,7 +560,7 @@ export default class AxiomSyncPlugin extends Plugin {
       this.settings.lang = lang;
       await this.saveSettings();
     });
-    const t = (x: TransItemType, vars?: any) => {
+    const t = (x: TransItemType, vars?: I18nVars) => {
       return this.i18n.t(x, vars);
     };
 
@@ -573,7 +573,7 @@ export default class AxiomSyncPlugin extends Plugin {
       await this.getVaultRandomIDFromOldConfigFile();
 
     // no need to await this
-    this.tryToAddIgnoreFile();
+    void this.tryToAddIgnoreFile();
 
     const vaultBasePath = this.getVaultBasePath();
 
@@ -583,9 +583,10 @@ export default class AxiomSyncPlugin extends Plugin {
         vaultRandomIDFromOldConfigFile,
         profileID
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       new Notice(
-        err?.message ?? "error of prepareDBAndVaultRandomID",
+        message || "error of prepareDBAndVaultRandomID",
         10 * 1000
       );
       throw err;
@@ -597,41 +598,42 @@ export default class AxiomSyncPlugin extends Plugin {
     // must AFTER preparing DB
     this.enableAutoClearSyncPlanHist();
 
-    this.registerObsidianProtocolHandler(COMMAND_URI, async (inputParams) => {
-      // console.debug(inputParams);
-      const parsed = importQrCodeUri(inputParams, this.app.vault.getName());
-      if (parsed.status === "error") {
-        new Notice(parsed.message);
-      } else {
+    this.registerObsidianProtocolHandler(COMMAND_URI, (inputParams) => {
+      void (async () => {
+        const parsed = importQrCodeUri(inputParams, this.app.vault.getName());
+        if (parsed.status === "error") {
+          new Notice(parsed.message);
+          return;
+        }
         const copied = cloneDeep(parsed.result);
-        // new Notice(JSON.stringify(copied))
         this.settings = Object.assign({}, this.settings, copied);
-        this.saveSettings();
+        await this.saveSettings();
         new Notice(
           t("protocol_saveqr", {
             manifestName: this.manifest.name,
           })
         );
-      }
+      })();
     });
 
-    this.registerObsidianProtocolHandler(
-      COMMAND_CALLBACK,
-      async (inputParams) => {
+    this.registerObsidianProtocolHandler(COMMAND_CALLBACK, (inputParams) => {
+      void (async () => {
         new Notice(
           t("protocol_callbacknotsupported", {
             params: JSON.stringify(inputParams),
           })
         );
-      }
-    );
+      })();
+    });
 
     // S3-only build: disable all OAuth callback handlers for non-S3 services.
 
     this.syncRibbon = this.addRibbonIcon(
       iconNameSyncWait,
       `${this.manifest.name}`,
-      async () => this.syncRun("manual")
+      () => {
+        void this.syncRun("manual");
+      }
     );
 
     this.enableMobileStatusBarIfSet();
@@ -656,39 +658,41 @@ export default class AxiomSyncPlugin extends Plugin {
       }
       // update statusbar text every 30 seconds
       this.registerInterval(
-        window.setInterval(async () => {
+        window.setInterval(() => {
           if (!this.isSyncing) {
-            this.updateLastSyncMsg(
-              undefined,
-              "not_syncing",
-              await getLastSuccessSyncTimeByVault(this.db, this.vaultRandomID),
-              await getLastFailedSyncTimeByVault(this.db, this.vaultRandomID)
-            );
+            void (async () => {
+              this.updateLastSyncMsg(
+                undefined,
+                "not_syncing",
+                await getLastSuccessSyncTimeByVault(this.db, this.vaultRandomID),
+                await getLastFailedSyncTimeByVault(this.db, this.vaultRandomID)
+              );
+            })();
           }
         }, 1000 * 30)
       );
     }
 
     this.addCommand({
-      id: "axiom-sync:start-sync",
+      id: "start-sync",
       name: t("command_startsync"),
       icon: iconNameSyncWait,
-      callback: async () => {
-        this.syncRun("manual");
+      callback: () => {
+        void this.syncRun("manual");
       },
     });
 
     this.addCommand({
-      id: "axiom-sync:start-sync-dry-run",
+      id: "start-sync-dry-run",
       name: t("command_drynrun"),
       icon: iconNameSyncWait,
-      callback: async () => {
-        this.syncRun("dry");
+      callback: () => {
+        void this.syncRun("dry");
       },
     });
 
     this.addCommand({
-      id: "axiom-sync:export-sync-plans-1-only-change",
+      id: "export-sync-plans-1-only-change",
       name: t("command_exportsyncplans_1_only_change"),
       icon: iconNameLogs,
       callback: async () => {
@@ -704,7 +708,7 @@ export default class AxiomSyncPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "axiom-sync:export-sync-plans-1",
+      id: "export-sync-plans-1",
       name: t("command_exportsyncplans_1"),
       icon: iconNameLogs,
       callback: async () => {
@@ -720,7 +724,7 @@ export default class AxiomSyncPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "axiom-sync:export-sync-plans-5",
+      id: "export-sync-plans-5",
       name: t("command_exportsyncplans_5"),
       icon: iconNameLogs,
       callback: async () => {
@@ -736,7 +740,7 @@ export default class AxiomSyncPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "axiom-sync:export-sync-plans-all",
+      id: "export-sync-plans-all",
       name: t("command_exportsyncplans_all"),
       icon: iconNameLogs,
       callback: async () => {
@@ -769,14 +773,14 @@ export default class AxiomSyncPlugin extends Plugin {
     }
 
     // compare versions and read new versions
-    const { oldVersion } = await upsertPluginVersionByVault(
+    await upsertPluginVersionByVault(
       this.db,
       this.vaultRandomID,
       this.manifest.version
     );
   }
 
-  async onunload() {
+  onunload() {
     logInfo(`unloading plugin ${this.manifest.id}`);
     this.syncRibbon = undefined;
     if (this.appContainerObserver !== undefined) {
@@ -831,9 +835,8 @@ export default class AxiomSyncPlugin extends Plugin {
       this.settings.telegram.indexByKey = {};
     }
 
-    if (this.settings.webdav.manualRecursive === undefined) {
-      this.settings.webdav.manualRecursive = true;
-    }
+    const legacyWebdav = this.settings.webdav as typeof this.settings.webdav &
+      Record<string, unknown>;
     if (
       this.settings.webdav.depth === undefined ||
       this.settings.webdav.depth === "auto" ||
@@ -843,8 +846,8 @@ export default class AxiomSyncPlugin extends Plugin {
     ) {
       // auto is deprecated as of 20240116
       this.settings.webdav.depth = "manual_1";
-      this.settings.webdav.manualRecursive = true;
     }
+    Reflect.deleteProperty(legacyWebdav, "manualRecursive");
     if (this.settings.webdav.remoteBaseDir === undefined) {
       this.settings.webdav.remoteBaseDir = "";
     }
@@ -884,9 +887,10 @@ export default class AxiomSyncPlugin extends Plugin {
     }
     this.settings.logToDB = false; // deprecated as of 20240113
 
-    if (requireApiVersion(API_VER_ENSURE_REQURL_OK)) {
-      this.settings.s3.bypassCorsLocally = true; // deprecated as of 20240113
-    }
+    Reflect.deleteProperty(
+      this.settings.s3 as typeof this.settings.s3 & Record<string, unknown>,
+      "bypassCorsLocally"
+    );
 
     if (this.settings.agreeToUseSyncV3 === undefined) {
       this.settings.agreeToUseSyncV3 = false;
@@ -982,15 +986,18 @@ export default class AxiomSyncPlugin extends Plugin {
 
   async getVaultRandomIDFromOldConfigFile() {
     let vaultRandomID = "";
-    if (this.settings.vaultRandomID !== undefined) {
+    const legacySettings = this.settings as AxiomSyncPluginSettings &
+      Record<string, unknown>;
+    const legacyVaultRandomID = Reflect.get(legacySettings, "vaultRandomID");
+    if (typeof legacyVaultRandomID === "string") {
       // In old version, the vault id is saved in data.json
       // But we want to store it in localForage later
-      if (this.settings.vaultRandomID !== "") {
+      if (legacyVaultRandomID !== "") {
         // a real string was assigned before
-        vaultRandomID = this.settings.vaultRandomID;
+        vaultRandomID = legacyVaultRandomID;
       }
       logDebug("vaultRandomID is no longer saved in data.json");
-      delete this.settings.vaultRandomID;
+      Reflect.deleteProperty(legacySettings, "vaultRandomID");
       await this.saveSettings();
     }
     return vaultRandomID;
@@ -1113,8 +1120,8 @@ export default class AxiomSyncPlugin extends Plugin {
   };
 
   _syncOnSaveEvent2 = throttle(
-    async () => {
-      await this._checkCurrFileModified("FILE_CHANGES");
+    () => {
+      void this._checkCurrFileModified("FILE_CHANGES");
     },
     1000 * 3,
     {
@@ -1160,7 +1167,7 @@ export default class AxiomSyncPlugin extends Plugin {
 
   enableCheckingFileStat() {
     this.app.workspace.onLayoutReady(() => {
-      const t = (x: TransItemType, vars?: any) => {
+      const t = (x: TransItemType, vars?: I18nVars) => {
         return this.i18n.t(x, vars);
       };
       this.registerEvent(
@@ -1200,7 +1207,7 @@ export default class AxiomSyncPlugin extends Plugin {
   }
 
   setCurrSyncMsg(
-    t: (x: TransItemType, vars?: any) => string,
+    t: (x: TransItemType, vars?: I18nVars) => string,
     s: SyncTriggerSourceType,
     i: number,
     totalCount: number,
@@ -1234,7 +1241,7 @@ export default class AxiomSyncPlugin extends Plugin {
     // console.debug(lastSuccessSyncMillis);
     // console.debug(lastFailedSyncMillis);
 
-    const t = (x: TransItemType, vars?: any) => {
+    const t = (x: TransItemType, vars?: I18nVars) => {
       return this.i18n.t(x, vars);
     };
 

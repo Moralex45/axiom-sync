@@ -3,6 +3,8 @@ import { nanoid } from "nanoid";
 import type { Entity } from "./baseTypes";
 import { logInfo } from "./log";
 
+export type ErrorCallback = (error: unknown) => void;
+
 export abstract class FakeFs {
   abstract kind: string;
   abstract walk(): Promise<Entity[]>;
@@ -18,8 +20,8 @@ export abstract class FakeFs {
   abstract readFile(key: string): Promise<ArrayBuffer>;
   abstract rename(key1: string, key2: string): Promise<void>;
   abstract rm(key: string): Promise<void>;
-  abstract checkConnect(callbackFunc?: any): Promise<boolean>;
-  async checkConnectCommonOps(callbackFunc?: any) {
+  abstract checkConnect(callbackFunc?: ErrorCallback): Promise<boolean>;
+  async checkConnectCommonOps(callbackFunc?: ErrorCallback): Promise<boolean> {
     try {
       logInfo(`check connect: create folder`);
       const folderName = `rs-test-folder-${nanoid()}/`;
@@ -63,6 +65,6 @@ export abstract class FakeFs {
     }
   }
   abstract getUserDisplayName(): Promise<string>;
-  abstract revokeAuth(): Promise<any>;
+  abstract revokeAuth(): Promise<void>;
   abstract allowEmptyFile(): boolean;
 }

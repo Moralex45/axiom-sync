@@ -41,7 +41,7 @@ export const serializeMetadataOnRemote = (x: MetadataOnRemote) => {
   const y = x;
 
   if (y["version"] === undefined) {
-    y["version"] === DEFAULT_VERSION_FOR_METADATAONREMOTE;
+    y["version"] = DEFAULT_VERSION_FOR_METADATAONREMOTE;
   }
   if (y["generatedWhen"] === undefined) {
     y["generatedWhen"] = Date.now();
@@ -70,9 +70,9 @@ export const deserializeMetadataOnRemote = (x: string | ArrayBuffer) => {
     y1 = new TextDecoder().decode(x);
   }
 
-  let y2: any;
+  let y2: { readme?: unknown; d?: unknown };
   try {
-    y2 = JSON.parse(y1);
+    y2 = JSON.parse(y1) as { readme?: unknown; d?: unknown };
   } catch (e) {
     throw new Error(
       `invalid remote meta data file with first few chars: ${y1.slice(0, 5)}`
@@ -87,12 +87,11 @@ export const deserializeMetadataOnRemote = (x: string | ArrayBuffer) => {
 
   let y3: string;
   try {
-    y3 = (
-      base64url.parse(reverseString(y2["d"]), {
-        out: Buffer.allocUnsafe as any,
-        loose: true,
-      }) as Buffer
-    ).toString("utf-8");
+    const parsed = base64url.parse(reverseString(String(y2["d"])), {
+      out: Uint8Array,
+      loose: true,
+    });
+    y3 = Buffer.from(parsed).toString("utf-8");
   } catch (e) {
     throw new Error('invalid remote meta data file (invalid "d" field)!');
   }
@@ -102,7 +101,7 @@ export const deserializeMetadataOnRemote = (x: string | ArrayBuffer) => {
     y4 = JSON.parse(y3) as MetadataOnRemote;
   } catch (e) {
     throw new Error(
-      `invalid remote meta data file with \"d\" field with first few chars: ${y3.slice(
+      `invalid remote meta data file with "d" field with first few chars: ${y3.slice(
         0,
         5
       )}`

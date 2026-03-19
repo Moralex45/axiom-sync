@@ -4,7 +4,8 @@ import {
   type Entity,
   type WebdisConfig,
 } from "./baseTypes";
-import { FakeFs } from "./fsAll";
+import { type ErrorCallback, FakeFs } from "./fsAll";
+import { httpRequest, type HttpResponseLike } from "./http";
 
 export const DEFAULT_WEBDIS_CONFIG: WebdisConfig = {
   address: "",
@@ -12,6 +13,14 @@ export const DEFAULT_WEBDIS_CONFIG: WebdisConfig = {
   password: "",
   remoteBaseDir: "",
 };
+
+interface WebdisScanResponse {
+  SCAN: [string, string[]];
+}
+
+interface WebdisHashResponse {
+  HGETALL: Record<string, string>;
+}
 
 const getWebdisPath = (fileOrFolderPath: string, remoteBaseDir: string) => {
   let key = fileOrFolderPath;
@@ -55,12 +64,12 @@ export class FakeFsWebdis extends FakeFs {
   kind: "webdis";
   webdisConfig: WebdisConfig;
   remoteBaseDir: string;
-  saveUpdatedConfigFunc: () => Promise<any>;
+  saveUpdatedConfigFunc: () => Promise<void>;
 
   constructor(
     webdisConfig: WebdisConfig,
     vaultName: string,
-    saveUpdatedConfigFunc: () => Promise<any>
+    saveUpdatedConfigFunc: () => Promise<void>
   ) {
     super();
     this.kind = "webdis";
@@ -69,11 +78,11 @@ export class FakeFsWebdis extends FakeFs {
     this.saveUpdatedConfigFunc = saveUpdatedConfigFunc;
   }
 
-  async _fetchCommand(
+  _fetchCommand(
     method: "GET" | "POST" | "PUT",
     urlPath: string,
     content?: ArrayBuffer
-  ) {
+  ): Promise<HttpResponseLike> {
     const address = this.webdisConfig.address;
     if (!address.startsWith(`https://`) && !address.startsWith(`http://`)) {
       throw Error(
@@ -94,7 +103,7 @@ export class FakeFsWebdis extends FakeFs {
     const username = this.webdisConfig.username ?? "";
     const password = this.webdisConfig.password ?? "";
     if (username !== "" && password !== "") {
-      return await fetch(fullUrl, {
+      return httpRequest(fullUrl, {
         method: method,
         headers: {
           Authorization: "Basic " + btoa(username + ":" + password),
@@ -102,7 +111,7 @@ export class FakeFsWebdis extends FakeFs {
         body: content,
       });
     } else if (username === "" && password === "") {
-      return await fetch(fullUrl, {
+      return httpRequest(fullUrl, {
         method: method,
         body: content,
       });
@@ -118,9 +127,9 @@ export class FakeFsWebdis extends FakeFs {
     const res: Entity[] = [];
     do {
       const command = `SCAN/${cursor}/MATCH/rs:fs:v1:${encodeURIComponent(this.remoteBaseDir + "/")}*:meta/COUNT/1000`;
-      const rsp = (await (await this._fetchCommand("GET", command)).json())[
-        "SCAN"
-      ];
+      const rsp = (await (
+        await this._fetchCommand("GET", command)
+      ).json<WebdisScanResponse>()).SCAN;
       // console.debug(rsp);
       cursor = rsp[0];
       for (const fullKeyWithMeta of rsp[1]) {
@@ -137,9 +146,9 @@ export class FakeFsWebdis extends FakeFs {
     let cursor = "0";
     const res: Entity[] = [];
     const command = `SCAN/${cursor}/MATCH/rs:fs:v1:${encodeURIComponent(this.remoteBaseDir + "/")}*:meta/COUNT/10`; // fewer keys
-    const rsp = (await (await this._fetchCommand("GET", command)).json())[
-      "SCAN"
-    ];
+    const rsp = (await (
+      await this._fetchCommand("GET", command)
+    ).json<WebdisScanResponse>()).SCAN;
     // console.debug(rsp);
     cursor = rsp[0];
     for (const fullKeyWithMeta of rsp[1]) {
@@ -160,9 +169,9 @@ export class FakeFsWebdis extends FakeFs {
   async _statFromRaw(key: string): Promise<Entity> {
     // console.debug(`_statFromRaw on ${key}`);
     const command = `HGETALL/${key}:meta`;
-    const rsp = (await (await this._fetchCommand("GET", command)).json())[
-      "HGETALL"
-    ];
+    const rsp = (await (
+      await this._fetchCommand("GET", command)
+    ).json<WebdisHashResponse>()).HGETALL;
     // console.debug(`rsp: ${JSON.stringify(rsp, null, 2)}`);
     if (isEqual(rsp, {})) {
       // empty!
@@ -187,9 +196,7 @@ export class FakeFsWebdis extends FakeFs {
     if (ctime !== undefined && ctime !== 0) {
       command = `${command}/ctime/${ctime}`;
     }
-    const rsp = (await (await this._fetchCommand("GET", command)).json())[
-      "HSET"
-    ];
+    await (await this._fetchCommand("GET", command)).json();
     return await this.stat(key);
   }
 
@@ -209,15 +216,11 @@ export class FakeFsWebdis extends FakeFs {
     if (ctime !== undefined && ctime !== 0) {
       command1 = `${command1}/ctime/${ctime}`;
     }
-    const rsp1 = (await (await this._fetchCommand("GET", command1)).json())[
-      "HSET"
-    ];
+    await (await this._fetchCommand("GET", command1)).json();
 
     // content
     const command2 = `SET/${fullKey}:content`;
-    const rsp2 = (
-      await (await this._fetchCommand("PUT", command2, content)).json()
-    )["SET"];
+    await (await this._fetchCommand("PUT", command2, content)).json();
 
     // fetch meta
     return await this.stat(key);
@@ -242,12 +245,10 @@ export class FakeFsWebdis extends FakeFs {
   async rm(key: string): Promise<void> {
     const fullKey = getWebdisPath(key, this.remoteBaseDir);
     const command = `DEL/${fullKey}:meta/${fullKey}:content`;
-    const rsp = (await (await this._fetchCommand("PUT", command)).json())[
-      "DEL"
-    ];
+    await (await this._fetchCommand("PUT", command)).json();
   }
 
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
+  async checkConnect(callbackFunc?: ErrorCallback): Promise<boolean> {
     try {
       const k = await (
         await this._fetchCommand("GET", "PING/helloworld")
@@ -255,21 +256,20 @@ export class FakeFsWebdis extends FakeFs {
       if (!isEqual(k, { PING: "helloworld" })) {
         throw Error(`no correct ping response`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       callbackFunc?.(err);
       return false;
     }
-    return await this.checkConnectCommonOps(callbackFunc);
-    // return true;
+    return this.checkConnectCommonOps(callbackFunc);
   }
 
-  async getUserDisplayName(): Promise<string> {
-    return this.webdisConfig.username || "<no usernme>";
+  getUserDisplayName(): Promise<string> {
+    return Promise.resolve(this.webdisConfig.username || "<no username>");
   }
 
-  async revokeAuth(): Promise<any> {
-    throw new Error("Method not implemented.");
+  revokeAuth(): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   allowEmptyFile(): boolean {

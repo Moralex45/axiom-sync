@@ -8,7 +8,10 @@ import { logDebug, logInfo } from "./log";
 
 declare global {
   interface Window {
-    moment: (...data: any) => any;
+    moment: (...data: unknown[]) => {
+      toISOString: (keepOffset?: boolean) => string;
+      format: () => string;
+    };
   }
 }
 
@@ -247,7 +250,13 @@ export const extractSvgSub = (x: string, subEl = "rect") => {
   const dom = parser.parseFromString(x, "image/svg+xml");
   const svg = dom.querySelector("svg")!;
   svg.setAttribute("viewbox", "0 0 10 10");
-  return svg.innerHTML;
+  if (svg.querySelector(subEl) === null) {
+    return "";
+  }
+  const serializer = new window.XMLSerializer();
+  return Array.from(svg.childNodes)
+    .map((child) => serializer.serializeToString(child))
+    .join("");
 };
 
 /**
@@ -317,7 +326,7 @@ export const getSplitRanges = (bytesTotal: number, bytesEachPart: number) => {
  * @param obj anything
  * @returns string of the name of the object
  */
-export const getTypeName = (obj: any) => {
+export const getTypeName = (obj: unknown) => {
   return Object.prototype.toString.call(obj).slice(8, -1);
 };
 
@@ -366,7 +375,7 @@ export const unixTimeToStr = (x: number | undefined | null, hasMs = false) => {
  */
 const getCircularReplacer = () => {
   const seen = new WeakSet();
-  return (key: any, value: any) => {
+  return (_key: string, value: unknown) => {
     if (typeof value === "object" && value !== null) {
       if (seen.has(value)) {
         return;
@@ -378,13 +387,13 @@ const getCircularReplacer = () => {
 };
 
 /**
- * Convert "any" value to string.
+ * Convert unknown value to string.
  * @param x
  * @returns
  */
-export const toText = (x: any) => {
+export const toText = (x: unknown) => {
   if (x === undefined || x === null) {
-    return `${x}`;
+    return String(x);
   }
   if (typeof x === "string") {
     return x;
@@ -401,8 +410,10 @@ export const toText = (x: any) => {
 
   if (
     x instanceof Error ||
-    (x?.stack &&
-      x?.message &&
+    (typeof x === "object" &&
+      x !== null &&
+      "stack" in x &&
+      "message" in x &&
       typeof x.stack === "string" &&
       typeof x.message === "string")
   ) {
@@ -430,19 +441,22 @@ export const statFix = async (vault: Vault, path: string) => {
   if (s === undefined || s === null) {
     throw Error(`${path} doesn't exist cannot run stat`);
   }
-  if (s.ctime === undefined || s.ctime === null || Number.isNaN(s.ctime)) {
-    s.ctime = undefined as any; // force assignment
-  }
-  if (s.mtime === undefined || s.mtime === null || Number.isNaN(s.mtime)) {
-    s.mtime = undefined as any; // force assignment
-  }
-  if (
-    (s.size === undefined || s.size === null || Number.isNaN(s.size)) &&
-    s.type === "folder"
-  ) {
-    s.size = 0;
-  }
-  return s;
+  return {
+    ...s,
+    ctime:
+      s.ctime === undefined || s.ctime === null || Number.isNaN(s.ctime)
+        ? undefined
+        : s.ctime,
+    mtime:
+      s.mtime === undefined || s.mtime === null || Number.isNaN(s.mtime)
+        ? undefined
+        : s.mtime,
+    size:
+      (s.size === undefined || s.size === null || Number.isNaN(s.size)) &&
+      s.type === "folder"
+        ? 0
+        : s.size,
+  };
 };
 
 export const isSpecialFolderNameToSkip = (
@@ -526,9 +540,7 @@ export const compareVersion = (x: string | null, y: string | null) => {
  * @returns
  */
 export const stringToFragment = (string: string) => {
-  const wrapper = document.createElement("template");
-  wrapper.innerHTML = string;
-  return wrapper.content;
+  return document.createRange().createContextualFragment(string);
 };
 
 /**
@@ -558,7 +570,7 @@ export const changeMobileStatusBar = (
   if (appContainer === undefined || statusbar === undefined) {
     // give up, exit
     console.warn(`give up watching appContainer for statusbar`);
-    console.warn(`appContainer=${appContainer}, statusbar=${statusbar}`);
+    console.warn("appContainer or statusbar is unavailable");
     return undefined;
   }
 
@@ -572,8 +584,9 @@ export const changeMobileStatusBar = (
         if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
           const k = mutation.addedNodes[0] as Element;
           if (
-            k.className.contains("mobile-navbar") ||
-            k.className.contains("mobile-toolbar")
+            k instanceof HTMLElement &&
+            (k.classList.contains("mobile-navbar") ||
+              k.classList.contains("mobile-toolbar"))
           ) {
             // have to wait, otherwise the height is not correct??
             await delay(300);
@@ -581,8 +594,10 @@ export const changeMobileStatusBar = (
               .getComputedStyle(k as Element)
               .getPropertyValue("height");
 
-            statusbar.style.setProperty("display", "flex");
-            statusbar.style.setProperty("margin-bottom", height);
+            statusbar.addClass("axiom-sync-mobile-statusbar");
+            statusbar.setCssStyles({
+              marginBottom: height,
+            });
           }
         }
       }
@@ -602,8 +617,10 @@ export const changeMobileStatusBar = (
       )[0] as HTMLElement;
       // thanks to community's solution
       const height = window.getComputedStyle(navBar).getPropertyValue("height");
-      statusbar.style.setProperty("display", "flex");
-      statusbar.style.setProperty("margin-bottom", height);
+      statusbar.addClass("axiom-sync-mobile-statusbar");
+      statusbar.setCssStyles({
+        marginBottom: height,
+      });
     } catch (e) {
       // skip
     }
@@ -616,8 +633,10 @@ export const changeMobileStatusBar = (
       // biome-ignore lint/style/noParameterAssign: we want gc
       oldAppContainerObserver = undefined;
     }
-    statusbar.style.removeProperty("display");
-    statusbar.style.removeProperty("margin-bottom");
+    statusbar.removeClass("axiom-sync-mobile-statusbar");
+    statusbar.setCssStyles({
+      marginBottom: "",
+    });
     return undefined;
   }
 };
@@ -642,7 +661,7 @@ export const fixEntityListCasesInplace = (entities: { keyRaw: string }[]) => {
     const segs = e.keyRaw.split("/");
     if (e.keyRaw.endsWith("/")) {
       // folder
-      if (caseMapping.hasOwnProperty(parentFolderLower)) {
+      if (Object.prototype.hasOwnProperty.call(caseMapping, parentFolderLower)) {
         const newKeyRaw = `${caseMapping[parentFolderLower]}${segs
           .slice(-2)
           .join("/")}`;
@@ -654,7 +673,7 @@ export const fixEntityListCasesInplace = (entities: { keyRaw: string }[]) => {
       }
     } else {
       // file
-      if (caseMapping.hasOwnProperty(parentFolderLower)) {
+      if (Object.prototype.hasOwnProperty.call(caseMapping, parentFolderLower)) {
         const newKeyRaw = `${caseMapping[parentFolderLower]}${segs
           .slice(-1)
           .join("/")}`;
@@ -673,9 +692,9 @@ export const fixEntityListCasesInplace = (entities: { keyRaw: string }[]) => {
  * @param object
  * @returns bytes
  */
-export const roughSizeOfObject = (object: any) => {
-  const objectList: any[] = [];
-  const stack = [object];
+export const roughSizeOfObject = (object: unknown) => {
+  const objectList: object[] = [];
+  const stack: unknown[] = [object];
   let bytes = 0;
 
   while (stack.length) {
@@ -692,11 +711,15 @@ export const roughSizeOfObject = (object: any) => {
         bytes += 8;
         break;
       case "object":
-        if (!objectList.includes(value)) {
+        if (
+          value !== null &&
+          typeof value === "object" &&
+          !objectList.includes(value)
+        ) {
           objectList.push(value);
           for (const prop in value) {
-            if (value.hasOwnProperty(prop)) {
-              stack.push(value[prop]);
+            if (Object.prototype.hasOwnProperty.call(value, prop)) {
+              stack.push((value as Record<string, unknown>)[prop]);
             }
           }
         }

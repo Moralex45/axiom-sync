@@ -1,10 +1,7 @@
 import * as path from "path";
-import type {
-  Entity,
-  TelegramConfig,
-  TelegramIndexEntry,
-} from "./baseTypes";
+import type { Entity, TelegramConfig, TelegramIndexEntry } from "./baseTypes";
 import { FakeFs } from "./fsAll";
+import { httpRequest } from "./http";
 import { delay, getFolderLevels } from "./misc";
 
 const TELEGRAM_INDEX_MARKER = "[AXIOM_SYNC_INDEX_V1]";
@@ -48,53 +45,6 @@ export interface TelegramChatCandidate {
   id: string;
   label: string;
 }
-
-type ObsidianRequestUrl = (param: {
-  url: string;
-  method?: string;
-  headers?: Record<string, string>;
-  body?: string | ArrayBuffer;
-  contentType?: string;
-}) => Promise<{
-  status: number;
-  text: string;
-  json?: any;
-  arrayBuffer: ArrayBuffer;
-  headers: Record<string, string>;
-}>;
-
-const tryGetObsidianRequestUrl = (): ObsidianRequestUrl | undefined => {
-  try {
-    const injected = (globalThis as any)?.__axiomSyncRequestUrl;
-    if (typeof injected === "function") {
-      return injected as ObsidianRequestUrl;
-    }
-
-    const fromGlobal =
-      (globalThis as any)?.window?.require ??
-      (globalThis as any)?.require ??
-      (globalThis as any)?.window?.module?.require ??
-      (globalThis as any)?.module?.require;
-    const req =
-      fromGlobal ??
-      (() => {
-        try {
-          return Function(
-            "return (typeof require !== 'undefined') ? require : undefined;"
-          )();
-        } catch (e) {
-          return undefined;
-        }
-      })();
-    if (typeof req !== "function") {
-      return undefined;
-    }
-    const obsidianModule = req("obsidian");
-    return obsidianModule?.requestUrl as ObsidianRequestUrl | undefined;
-  } catch (e) {
-    return undefined;
-  }
-};
 
 interface TelegramMessage {
   message_id: number;
@@ -227,7 +177,9 @@ const formDataToMultipart = async (formData: FormData) => {
 
     const filename = (value as File).name ?? "blob";
     const contentType =
-      (value as Blob).type === "" ? "application/octet-stream" : (value as Blob).type;
+      (value as Blob).type === ""
+        ? "application/octet-stream"
+        : (value as Blob).type;
     chunks.push(
       `Content-Disposition: form-data; name="${name}"; filename="${filename}"\r\n`
     );
@@ -253,29 +205,21 @@ export const getTelegramChatCandidatesFromUpdates = async (
   const url = `${normApiBaseUrl(apiBaseUrl)}/bot${token}/getUpdates`;
   let data: TelegramApiResp<TelegramUpdateEnvelope[]>;
   try {
-    const obsidianRequestUrl = tryGetObsidianRequestUrl();
-
-    if (obsidianRequestUrl !== undefined) {
-      const rsp = await obsidianRequestUrl({ url, method: "GET" });
-      data =
-        (rsp.json as TelegramApiResp<TelegramUpdateEnvelope[]>) ??
-        (JSON.parse(rsp.text) as TelegramApiResp<TelegramUpdateEnvelope[]>);
-    } else {
-      const fetchRsp = await fetch(url);
-      data = (await fetchRsp.json()) as TelegramApiResp<TelegramUpdateEnvelope[]>;
-      if (!fetchRsp.ok) {
-        throw Error(data.description ?? fetchRsp.statusText);
-      }
+    const rsp = await httpRequest(url, { method: "GET" });
+    data = await rsp.json<TelegramApiResp<TelegramUpdateEnvelope[]>>();
+    if (!rsp.ok) {
+      throw Error(data.description ?? rsp.statusText);
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "network error";
     throw Error(
-      `telegram getUpdates request failed: ${
-        e?.message ?? "network error"
-      }`
+      `telegram getUpdates request failed: ${message}`
     );
   }
   if (data.ok !== true) {
-    throw Error(`telegram api getUpdates failed: ${data.description ?? "unknown error"}`);
+    throw Error(
+      `telegram api getUpdates failed: ${data.description ?? "unknown error"}`
+    );
   }
 
   const chatsMap = new Map<string, TelegramChatCandidate>();
@@ -286,7 +230,10 @@ export const getTelegramChatCandidatesFromUpdates = async (
     const id = `${chat.id}`;
     const title =
       chat.title ||
-      [chat.first_name, chat.last_name].filter((x) => !!x).join(" ").trim() ||
+      [chat.first_name, chat.last_name]
+        .filter((x) => !!x)
+        .join(" ")
+        .trim() ||
       (chat.username ? `@${chat.username}` : "") ||
       "Unknown chat";
     const usernameHint = chat.username ? ` @${chat.username}` : "";
@@ -311,19 +258,17 @@ export class FakeFsTelegram extends FakeFs {
   kind: "telegram";
   telegramConfig: TelegramConfig;
   vaultName: string;
-  saveUpdatedConfigFunc: () => Promise<any>;
+  saveUpdatedConfigFunc: () => Promise<void>;
 
   remoteIndexLoaded: boolean;
   remoteIndexLoadPromise?: Promise<void>;
   remoteIndexDirty: boolean;
   remoteIndexFlushPromise?: Promise<void>;
   remoteIndexFlushTimer?: ReturnType<typeof setTimeout>;
-  obsidianRequestUrl?: ObsidianRequestUrl | null;
-
   constructor(
     telegramConfig: TelegramConfig,
     vaultName: string,
-    saveUpdatedConfigFunc: () => Promise<any>
+    saveUpdatedConfigFunc: () => Promise<void>
   ) {
     super();
     this.kind = "telegram";
@@ -332,7 +277,6 @@ export class FakeFsTelegram extends FakeFs {
     this.saveUpdatedConfigFunc = saveUpdatedConfigFunc;
     this.remoteIndexLoaded = false;
     this.remoteIndexDirty = false;
-    this.obsidianRequestUrl = undefined;
   }
 
   private getApiBaseUrl() {
@@ -356,7 +300,9 @@ export class FakeFsTelegram extends FakeFs {
   }
 
   private getNamespacePrefix() {
-    const configured = normalizeRemoteBaseDir(this.telegramConfig.remoteBaseDir);
+    const configured = normalizeRemoteBaseDir(
+      this.telegramConfig.remoteBaseDir
+    );
     if (configured !== "") {
       return configured;
     }
@@ -390,14 +336,6 @@ export class FakeFsTelegram extends FakeFs {
     return configured;
   }
 
-  private async getObsidianRequestUrl() {
-    if (this.obsidianRequestUrl !== undefined) {
-      return this.obsidianRequestUrl;
-    }
-    this.obsidianRequestUrl = tryGetObsidianRequestUrl() ?? null;
-    return this.obsidianRequestUrl;
-  }
-
   private async callApi<T>(
     method: string,
     initFactory?: () => RequestInit
@@ -406,7 +344,7 @@ export class FakeFsTelegram extends FakeFs {
     const url = `${this.getApiBaseUrl()}/bot${token}/${method}`;
     const retryMs = [0, 1000, 2000, 4000, 8000];
 
-    let lastError: any = undefined;
+    let lastError: Error | undefined;
     for (let idx = 0; idx < retryMs.length; ++idx) {
       if (idx !== 0) {
         await delay(retryMs[idx]);
@@ -414,48 +352,49 @@ export class FakeFsTelegram extends FakeFs {
 
       try {
         const init = initFactory?.() ?? {};
-        const reqUrl = await this.getObsidianRequestUrl();
         let status = 0;
         let data: TelegramApiResp<T> | undefined = undefined;
         let retryAfterHeader: string | null = null;
-
-        if (reqUrl !== null && reqUrl !== undefined) {
-          let body = init.body as any;
-          let contentType = (init.headers as any)?.["content-type"] as
-            | string
-            | undefined;
-          let headers: Record<string, string> | undefined = undefined;
-          if (init.headers !== undefined) {
-            headers = Object.fromEntries(
-              Object.entries(init.headers as any).map(([k, v]) => [k, `${v}`])
-            );
-          }
-          if (body instanceof FormData) {
-            const transformed = await formDataToMultipart(body);
-            body = transformed.body;
-            contentType = transformed.contentType;
-          }
-          const rsp = await reqUrl({
-            url,
-            method: init.method,
-            headers,
-            body: body as any,
-            contentType,
-          });
-          status = rsp.status;
-          retryAfterHeader = rsp.headers?.["retry-after"] ?? null;
-          data =
-            (rsp.json as TelegramApiResp<T>) ??
-            (JSON.parse(rsp.text) as TelegramApiResp<T>);
-        } else {
-          const rsp = await fetch(url, init);
-          status = rsp.status;
-          retryAfterHeader = rsp.headers.get("retry-after");
-          try {
-            data = (await rsp.json()) as TelegramApiResp<T>;
-          } catch (e) {
-            data = undefined;
-          }
+        let body = init.body;
+        let contentType: string | undefined;
+        let headers: Record<string, string> | undefined;
+        if (init.headers instanceof Headers) {
+          headers = Object.fromEntries(init.headers.entries());
+        } else if (Array.isArray(init.headers)) {
+          headers = Object.fromEntries(init.headers);
+        } else if (init.headers !== undefined) {
+          headers = Object.fromEntries(
+            Object.entries(init.headers).map(([k, v]) => [k, String(v)])
+          );
+        }
+        contentType = headers?.["content-type"] ?? headers?.["Content-Type"];
+        if (
+          body instanceof FormData &&
+          globalThis.__axiomSyncRequestUrl !== undefined
+        ) {
+          const transformed = await formDataToMultipart(body);
+          body = transformed.body;
+          contentType = transformed.contentType;
+        }
+        const rsp = await httpRequest(url, {
+          method: init.method,
+          headers,
+          body:
+            body instanceof ArrayBuffer ||
+            body instanceof FormData ||
+            typeof body === "string"
+              ? body
+              : body instanceof Uint8Array
+                ? body
+                : undefined,
+          contentType,
+        });
+        status = rsp.status;
+        retryAfterHeader = rsp.headers["retry-after"] ?? null;
+        try {
+          data = await rsp.json<TelegramApiResp<T>>();
+        } catch {
+          data = undefined;
         }
 
         if (status >= 200 && status < 300 && data?.ok === true) {
@@ -483,8 +422,8 @@ export class FakeFsTelegram extends FakeFs {
             data?.description ?? `status ${status}`
           }`
         );
-      } catch (e: any) {
-        lastError = e;
+      } catch (e: unknown) {
+        lastError = e instanceof Error ? e : new Error(String(e));
       }
     }
 
@@ -493,36 +432,19 @@ export class FakeFsTelegram extends FakeFs {
 
   private async getBinaryByUrl(url: string): Promise<ArrayBuffer> {
     const retryMs = [0, 1000, 2000, 4000, 8000];
-    let lastError: any = undefined;
+    let lastError: Error | undefined;
 
     for (let idx = 0; idx < retryMs.length; ++idx) {
       if (idx !== 0) {
         await delay(retryMs[idx]);
       }
       try {
-        const reqUrl = await this.getObsidianRequestUrl();
-        if (reqUrl !== null && reqUrl !== undefined) {
-          const rsp = await reqUrl({ url, method: "GET" });
-          if (rsp.status >= 200 && rsp.status < 300) {
-            return rsp.arrayBuffer;
-          }
-          if (shouldRetryStatus(rsp.status)) {
-            const extraWait = getRetryAfterMs(rsp.headers?.["retry-after"] ?? null);
-            if (extraWait !== undefined) {
-              await delay(extraWait);
-            }
-            lastError = Error(`telegram download failed: ${rsp.status}`);
-            continue;
-          }
-          throw Error(`telegram download failed: ${rsp.status}`);
-        }
-
-        const rsp = await fetch(url);
+        const rsp = await httpRequest(url, { method: "GET" });
         if (rsp.ok) {
           return await rsp.arrayBuffer();
         }
         if (shouldRetryStatus(rsp.status)) {
-          const extraWait = getRetryAfterMs(rsp.headers.get("retry-after"));
+          const extraWait = getRetryAfterMs(rsp.headers["retry-after"] ?? null);
           if (extraWait !== undefined) {
             await delay(extraWait);
           }
@@ -530,8 +452,8 @@ export class FakeFsTelegram extends FakeFs {
           continue;
         }
         throw Error(`telegram download failed: ${rsp.status}`);
-      } catch (e) {
-        lastError = e;
+      } catch (e: unknown) {
+        lastError = e instanceof Error ? e : new Error(String(e));
       }
     }
     throw lastError ?? Error(`telegram download failed`);
@@ -779,8 +701,8 @@ export class FakeFsTelegram extends FakeFs {
     return entities;
   }
 
-  async walkPartial(): Promise<Entity[]> {
-    return await this.walk();
+  walkPartial(): Promise<Entity[]> {
+    return this.walk();
   }
 
   async stat(key: string): Promise<Entity> {
@@ -848,7 +770,11 @@ export class FakeFsTelegram extends FakeFs {
     const resp = await this.callApi<TelegramMessage>("sendDocument", () => {
       const formData = new FormData();
       formData.append("chat_id", chatId);
-      formData.append("document", new Blob([content]), path.posix.basename(key));
+      formData.append(
+        "document",
+        new Blob([content]),
+        path.posix.basename(key)
+      );
       return {
         method: "POST",
         body: formData,
@@ -979,7 +905,7 @@ export class FakeFsTelegram extends FakeFs {
     await this.saveIndex();
   }
 
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
+  async checkConnect(callbackFunc?: (error: unknown) => void): Promise<boolean> {
     try {
       await this.callApi<{ id: number; username?: string }>("getMe");
       await this.ensureRemoteIndexLoaded();
@@ -997,8 +923,8 @@ export class FakeFsTelegram extends FakeFs {
     return rsp.result.username || rsp.result.first_name || "telegram-bot";
   }
 
-  async revokeAuth(): Promise<any> {
-    return undefined;
+  revokeAuth(): Promise<void> {
+    return Promise.resolve();
   }
 
   allowEmptyFile(): boolean {

@@ -92,12 +92,7 @@ describe("Encryption OpenSSL tests", () => {
     const password = "somepassword";
     const saltHex = "8302F586FAB491EC";
     const rounds = 10000; // static fixture in tests/static_assets/mona_lisa is generated with iter=10000
-    const enc = await encryptArrayBuffer(
-      fileArrBuf,
-      password,
-      rounds,
-      saltHex
-    );
+    const enc = await encryptArrayBuffer(fileArrBuf, password, rounds, saltHex);
     const opensslArrBuf = bufferToArrayBuffer(
       await fs.readFileSync(path.join(testFolder, testFileName + ".enc"))
     );

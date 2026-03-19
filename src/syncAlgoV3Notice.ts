@@ -5,6 +5,8 @@ import type AxiomSyncPlugin from "./main"; // unavoidable
 
 import { stringToFragment } from "./misc";
 
+type I18nVars = Record<string, string | number | boolean | null | undefined>;
+
 export class SyncAlgoV3Modal extends Modal {
   agree: boolean;
   manualBackup: boolean;
@@ -22,7 +24,7 @@ export class SyncAlgoV3Modal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    const t = (x: TransItemType, vars?: any) => {
+    const t = (x: TransItemType, vars?: I18nVars) => {
       return this.plugin.i18n.t(x, vars);
     };
 

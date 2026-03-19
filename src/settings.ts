@@ -53,6 +53,12 @@ import {
 } from "./misc";
 import { DEFAULT_PROFILER_CONFIG } from "./profiler";
 
+type I18nVars = Record<string, string | number | boolean | null | undefined>;
+
+const addSectionHeading = (container: HTMLElement, title: string) => {
+  new Setting(container).setName(title).setHeading();
+};
+
 class PasswordModal extends Modal {
   plugin: AxiomSyncPlugin;
   newPassword: string;
@@ -72,7 +78,7 @@ class PasswordModal extends Modal {
   onOpen() {
     const { contentEl } = this;
 
-    const t = (x: TransItemType, vars?: any) => {
+    const t = (x: TransItemType, vars?: I18nVars) => {
       return this.plugin.i18n.t(x, vars);
     };
 
@@ -155,7 +161,7 @@ class EncryptionMethodModal extends Modal {
   onOpen() {
     const { contentEl } = this;
 
-    const t = (x: TransItemType, vars?: any) => {
+    const t = (x: TransItemType, vars?: I18nVars) => {
       return this.plugin.i18n.t(x, vars);
     };
 
@@ -206,11 +212,14 @@ export class ChangeRemoteBaseDirModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    const t = (x: TransItemType, vars?: any) => this.plugin.i18n.t(x, vars);
+    const t = (x: TransItemType, vars?: I18nVars) =>
+      this.plugin.i18n.t(x, vars);
     contentEl.createEl("h2", { text: t("modal_remotebasedir_title") });
 
     if (checkHasSpecialCharForDir(this.newRemoteBaseDir)) {
-      contentEl.createEl("p", { text: t("modal_remotebasedir_invaliddirhint") });
+      contentEl.createEl("p", {
+        text: t("modal_remotebasedir_invaliddirhint"),
+      });
       new Setting(contentEl).addButton((button) => {
         button.setButtonText(t("goback"));
         button.onClick(() => this.close());
@@ -255,7 +264,7 @@ class ChangeS3RemotePrefixModal extends Modal {
   onOpen() {
     const { contentEl } = this;
 
-    const t = (x: TransItemType, vars?: any) => {
+    const t = (x: TransItemType, vars?: I18nVars) => {
       return this.plugin.i18n.t(x, vars);
     };
 
@@ -324,11 +333,7 @@ class ChangeS3RemotePrefixModal extends Modal {
 class SyncConfigDirModal extends Modal {
   plugin: AxiomSyncPlugin;
   saveDropdownFunc: () => void;
-  constructor(
-    app: App,
-    plugin: AxiomSyncPlugin,
-    saveDropdownFunc: () => void
-  ) {
+  constructor(app: App, plugin: AxiomSyncPlugin, saveDropdownFunc: () => void) {
     super(app);
     this.plugin = plugin;
     this.saveDropdownFunc = saveDropdownFunc;
@@ -337,7 +342,7 @@ class SyncConfigDirModal extends Modal {
   async onOpen() {
     const { contentEl } = this;
 
-    const t = (x: TransItemType, vars?: any) => {
+    const t = (x: TransItemType, vars?: I18nVars) => {
       return this.plugin.i18n.t(x, vars);
     };
 
@@ -386,7 +391,7 @@ class ExportSettingsQrCodeModal extends Modal {
   async onOpen() {
     const { contentEl } = this;
 
-    const t = (x: TransItemType, vars?: any) => {
+    const t = (x: TransItemType, vars?: I18nVars) => {
       return this.plugin.i18n.t(x, vars);
     };
 
@@ -458,7 +463,8 @@ class TelegramChatChooserModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    const t = (x: TransItemType, vars?: any) => this.plugin.i18n.t(x, vars);
+    const t = (x: TransItemType, vars?: I18nVars) =>
+      this.plugin.i18n.t(x, vars);
     contentEl.createEl("h2", { text: t("modal_telegram_chatchooser_title") });
     contentEl.createEl("p", {
       text: t("modal_telegram_chatchooser_desc"),
@@ -500,9 +506,10 @@ class TelegramChatChooserModal extends Modal {
 const getEyesElements = () => {
   const eyeEl = createElement(Eye);
   const eyeOffEl = createElement(EyeOff);
+  const serializer = new XMLSerializer();
   return {
-    eye: eyeEl.outerHTML,
-    eyeOff: eyeOffEl.outerHTML,
+    eye: serializer.serializeToString(eyeEl),
+    eyeOff: serializer.serializeToString(eyeOffEl),
   };
 };
 
@@ -510,10 +517,10 @@ export const wrapTextWithPasswordHide = (text: TextComponent) => {
   const { eye, eyeOff } = getEyesElements();
   const hider = text.inputEl.insertAdjacentElement("afterend", createSpan())!;
   // the init type of hider is "hidden" === eyeOff === password
-  hider.innerHTML = eyeOff;
-  hider.addEventListener("click", (e) => {
+  hider.replaceChildren(stringToFragment(eyeOff));
+  hider.addEventListener("click", () => {
     const isText = text.inputEl.getAttribute("type") === "text";
-    hider.innerHTML = isText ? eyeOff : eye;
+    hider.replaceChildren(stringToFragment(isText ? eyeOff : eye));
     text.inputEl.setAttribute("type", isText ? "password" : "text");
     text.inputEl.focus();
   });
@@ -533,15 +540,15 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
 
   display(): void {
     const { containerEl } = this;
-    containerEl.style.setProperty("overflow-wrap", "break-word");
+    containerEl.addClass("axiom-sync-settings-wrap");
 
     containerEl.empty();
 
-    const t = (x: TransItemType, vars?: any) => {
+    const t = (x: TransItemType, vars?: I18nVars) => {
       return this.plugin.i18n.t(x, vars);
     };
 
-    containerEl.createEl("h1", { text: "Axiom Sync" });
+    addSectionHeading(containerEl, "Axiom Sync");
 
     //////////////////////////////////////////////////
     // below for service chooser (part 1/2)
@@ -549,14 +556,20 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
 
     // we need to create the div in advance of any other service divs
     const serviceChooserDiv = containerEl.createDiv();
-    serviceChooserDiv.createEl("h2", { text: t("settings_chooseservice") });
+    addSectionHeading(serviceChooserDiv, t("settings_chooseservice"));
 
     new Setting(serviceChooserDiv)
       .setName(t("settings_lang"))
       .setDesc(t("settings_lang_desc"))
       .addDropdown((dropdown) => {
         const currentLang = this.plugin.settings.lang ?? "auto";
-        const allowed: LangTypeAndAuto[] = ["auto", "en", "ru", "zh_cn", "zh_tw"];
+        const allowed: LangTypeAndAuto[] = [
+          "auto",
+          "en",
+          "ru",
+          "zh_cn",
+          "zh_tw",
+        ];
         const selected = allowed.includes(currentLang) ? currentLang : "auto";
         dropdown
           .addOption("auto", "Auto (system)")
@@ -592,7 +605,10 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     const s3SecurityNoteDiv = serviceChooserDiv.createEl("div", {
       cls: "s3-security-note",
     });
-    for (const c of [t("settings_s3_disclaimer1"), t("settings_s3_disclaimer2")]) {
+    for (const c of [
+      t("settings_s3_disclaimer1"),
+      t("settings_s3_disclaimer2"),
+    ]) {
       s3SecurityNoteDiv.createEl("p", {
         text: c,
         cls: "s3-disclaimer",
@@ -605,7 +621,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
 
     const s3Div = serviceChooserDiv.createEl("div", { cls: "s3-hide" });
     s3Div.toggleClass("s3-hide", this.plugin.settings.serviceType !== "s3");
-    s3Div.createEl("h3", { text: t("settings_s3") });
+    addSectionHeading(s3Div, t("settings_s3"));
 
     const s3LongDescDiv = s3Div.createEl("div", { cls: "settings-long-desc" });
 
@@ -702,32 +718,6 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           });
       });
-
-    if (VALID_REQURL && !requireApiVersion(API_VER_ENSURE_REQURL_OK)) {
-      new Setting(s3Div)
-        .setName(t("settings_s3_bypasscorslocally"))
-        .setDesc(t("settings_s3_bypasscorslocally_desc"))
-        .addDropdown((dropdown) => {
-          dropdown
-            .addOption("disable", t("disable"))
-            .addOption("enable", t("enable"));
-
-          dropdown
-            .setValue(
-              `${
-                this.plugin.settings.s3.bypassCorsLocally ? "enable" : "disable"
-              }`
-            )
-            .onChange(async (value) => {
-              if (value === "enable") {
-                this.plugin.settings.s3.bypassCorsLocally = true;
-              } else {
-                this.plugin.settings.s3.bypassCorsLocally = false;
-              }
-              await this.plugin.saveSettings();
-            });
-        });
-    }
 
     new Setting(s3Div)
       .setName(t("settings_s3_parts"))
@@ -842,7 +832,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     new Setting(s3Div)
       .setName(t("settings_checkonnectivity"))
       .setDesc(t("settings_checkonnectivity_desc"))
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_checkonnectivity_button"));
         button.onClick(async () => {
           new Notice(t("settings_checkonnectivity_checking"));
@@ -852,8 +842,8 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
             () => this.plugin.saveSettings()
           );
           const errors = { msg: "" };
-          const res = await client.checkConnect((err: any) => {
-            errors.msg = err;
+          const res = await client.checkConnect((err: unknown) => {
+            errors.msg = err instanceof Error ? err.message : String(err);
           });
           if (res) {
             new Notice(t("settings_s3_connect_succ"));
@@ -873,7 +863,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       "s3-hide",
       this.plugin.settings.serviceType !== "telegram"
     );
-    telegramDiv.createEl("h3", { text: t("settings_telegram_section") });
+    addSectionHeading(telegramDiv, t("settings_telegram_section"));
 
     new Setting(telegramDiv)
       .setName(t("settings_telegram_bot_token"))
@@ -934,8 +924,12 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
                 this.display();
               }
             ).open();
-          } catch (e: any) {
-            new Notice(e?.message ?? t("settings_telegram_find_chat_failed"));
+          } catch (e: unknown) {
+            new Notice(
+              e instanceof Error
+                ? e.message
+                : t("settings_telegram_find_chat_failed")
+            );
           }
         });
       });
@@ -976,7 +970,8 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
             `${Math.max(
               1,
               Math.floor(
-                (this.plugin.settings.telegram.maxUploadBytes ?? 50 * 1024 * 1024) /
+                (this.plugin.settings.telegram.maxUploadBytes ??
+                  50 * 1024 * 1024) /
                   (1024 * 1024)
               )
             )}`
@@ -993,7 +988,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     new Setting(telegramDiv)
       .setName(t("settings_checkonnectivity"))
       .setDesc(t("settings_checkonnectivity_desc"))
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_checkonnectivity_button"));
         button.onClick(async () => {
           new Notice(t("settings_checkonnectivity_checking"));
@@ -1003,8 +998,8 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
             () => this.plugin.saveSettings()
           );
           const errors = { msg: "" };
-          const res = await client.checkConnect((err: any) => {
-            errors.msg = err;
+          const res = await client.checkConnect((err: unknown) => {
+            errors.msg = err instanceof Error ? err.message : String(err);
           });
           if (res) {
             new Notice(t("settings_telegram_connect_succ"));
@@ -1020,7 +1015,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     //////////////////////////////////////////////////
 
     const basicDiv = containerEl.createEl("div");
-    basicDiv.createEl("h2", { text: t("settings_basic") });
+    addSectionHeading(basicDiv, t("settings_basic"));
 
     const passwordSetting = new Setting(basicDiv);
     const encryptionMethodSetting = new Setting(basicDiv);
@@ -1049,7 +1044,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
             newPassword = value.trim();
           });
       })
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("confirm"));
         button.onClick(async () => {
           new PasswordModal(
@@ -1270,9 +1265,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     // below for advanced settings
     //////////////////////////////////////////////////
     const advDiv = containerEl.createEl("div");
-    advDiv.createEl("h2", {
-      text: t("settings_adv"),
-    });
+    addSectionHeading(advDiv, t("settings_adv"));
 
     new Setting(advDiv)
       .setName(t("settings_concurrency"))
@@ -1530,7 +1523,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       new Setting(advDiv)
         .setName(t("settings_enablemobilestatusbar"))
         .setDesc(t("settings_enablemobilestatusbar_desc"))
-        .addDropdown(async (dropdown) => {
+        .addDropdown((dropdown) => {
           dropdown
             .addOption("enable", t("enable"))
             .addOption("disable", t("disable"));
@@ -1568,16 +1561,14 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
 
     // import and export
     const importExportDiv = containerEl.createEl("div");
-    importExportDiv.createEl("h2", {
-      text: t("settings_importexport"),
-    });
+    addSectionHeading(importExportDiv, t("settings_importexport"));
 
     const importExportDivSetting1 = new Setting(importExportDiv)
       .setName(t("settings_export"))
       .setDesc(t("settings_export_desc"));
     importExportDivSetting1.settingEl.addClass("setting-need-wrapping");
     importExportDivSetting1
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_export_basic_and_advanced_button"));
         button.onClick(async () => {
           new ExportSettingsQrCodeModal(
@@ -1587,7 +1578,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
           ).open();
         });
       })
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_export_s3_button"));
         button.onClick(async () => {
           new ExportSettingsQrCodeModal(this.app, this.plugin, "s3").open();
@@ -1606,7 +1597,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
             importSettingVal = val;
           })
       )
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("confirm"));
         button.onClick(async () => {
           if (importSettingVal !== "") {
@@ -1651,12 +1642,12 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     //////////////////////////////////////////////////
 
     const debugDiv = containerEl.createEl("div");
-    debugDiv.createEl("h2", { text: t("settings_debug") });
+    addSectionHeading(debugDiv, t("settings_debug"));
 
     new Setting(debugDiv)
       .setName(t("settings_debuglevel"))
       .setDesc(t("settings_debuglevel_desc"))
-      .addDropdown(async (dropdown) => {
+      .addDropdown((dropdown) => {
         dropdown.addOption("info", "info");
         dropdown.addOption("debug", "debug");
         dropdown
@@ -1671,11 +1662,11 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     new Setting(debugDiv)
       .setName(t("settings_outputsettingsconsole"))
       .setDesc(t("settings_outputsettingsconsole_desc"))
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_outputsettingsconsole_button"));
         button.onClick(async () => {
           const c = messyConfigToNormal(await this.plugin.loadData());
-          console.info(c);
+          console.debug(c);
           new Notice(t("settings_outputsettingsconsole_notice"));
         });
       });
@@ -1683,7 +1674,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     new Setting(debugDiv)
       .setName(t("settings_obfuscatesettingfile"))
       .setDesc(t("settings_obfuscatesettingfile_desc"))
-      .addDropdown(async (dropdown) => {
+      .addDropdown((dropdown) => {
         dropdown
           .addOption("enable", t("enable"))
           .addOption("disable", t("disable"));
@@ -1713,7 +1704,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
       .setDesc(t("settings_syncplans_desc"));
     debugDivExportSyncPlans.settingEl.addClass("setting-need-wrapping");
     debugDivExportSyncPlans
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_syncplans_button_1_only_change"));
         button.onClick(async () => {
           await exportVaultSyncPlansToFiles(
@@ -1726,7 +1717,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
           new Notice(t("settings_syncplans_notice"));
         });
       })
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_syncplans_button_5_only_change"));
         button.onClick(async () => {
           await exportVaultSyncPlansToFiles(
@@ -1739,7 +1730,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
           new Notice(t("settings_syncplans_notice"));
         });
       })
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_syncplans_button_1"));
         button.onClick(async () => {
           await exportVaultSyncPlansToFiles(
@@ -1752,7 +1743,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
           new Notice(t("settings_syncplans_notice"));
         });
       })
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_syncplans_button_5"));
         button.onClick(async () => {
           await exportVaultSyncPlansToFiles(
@@ -1765,7 +1756,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
           new Notice(t("settings_syncplans_notice"));
         });
       })
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_syncplans_button_all"));
         button.onClick(async () => {
           await exportVaultSyncPlansToFiles(
@@ -1782,7 +1773,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     new Setting(debugDiv)
       .setName(t("settings_delsyncplans"))
       .setDesc(t("settings_delsyncplans_desc"))
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_delsyncplans_button"));
         button.onClick(async () => {
           await clearAllSyncPlanRecords(this.plugin.db);
@@ -1793,7 +1784,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     new Setting(debugDiv)
       .setName(t("settings_delprevsync"))
       .setDesc(t("settings_delprevsync_desc"))
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_delprevsync_button"));
         button.onClick(async () => {
           await clearAllPrevSyncRecordByVault(
@@ -1807,7 +1798,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     new Setting(debugDiv)
       .setName(t("settings_profiler_results"))
       .setDesc(t("settings_profiler_results_desc"))
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_profiler_results_button_all"));
         button.onClick(async () => {
           await exportVaultProfilerResultsToFiles(
@@ -1879,7 +1870,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     new Setting(debugDiv)
       .setName(t("settings_outputbasepathvaultid"))
       .setDesc(t("settings_outputbasepathvaultid_desc"))
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_outputbasepathvaultid_button"));
         button.onClick(async () => {
           new Notice(this.plugin.getVaultBasePath());
@@ -1890,7 +1881,7 @@ export class AxiomSyncSettingTab extends PluginSettingTab {
     new Setting(debugDiv)
       .setName(t("settings_resetcache"))
       .setDesc(t("settings_resetcache_desc"))
-      .addButton(async (button) => {
+      .addButton((button) => {
         button.setButtonText(t("settings_resetcache_button"));
         button.onClick(async () => {
           await destroyDBs();

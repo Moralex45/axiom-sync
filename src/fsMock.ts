@@ -1,5 +1,5 @@
 import type { Entity } from "./baseTypes";
-import { FakeFs } from "./fsAll";
+import { type ErrorCallback, FakeFs } from "./fsAll";
 
 export class FakeFsMock extends FakeFs {
   kind: "mock";
@@ -9,53 +9,53 @@ export class FakeFsMock extends FakeFs {
     this.kind = "mock";
   }
 
-  async walk(): Promise<Entity[]> {
-    throw new Error("Method not implemented.");
+  walk(): Promise<Entity[]> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async walkPartial(): Promise<Entity[]> {
-    return await this.walk();
+  walkPartial(): Promise<Entity[]> {
+    return this.walk();
   }
 
-  async stat(key: string): Promise<Entity> {
-    throw new Error("Method not implemented.");
+  stat(_key: string): Promise<Entity> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async mkdir(key: string, mtime: number, ctime: number): Promise<Entity> {
-    throw new Error("Method not implemented.");
+  mkdir(_key: string, _mtime: number, _ctime: number): Promise<Entity> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async writeFile(
-    key: string,
-    content: ArrayBuffer,
-    mtime: number,
-    ctime: number
+  writeFile(
+    _key: string,
+    _content: ArrayBuffer,
+    _mtime: number,
+    _ctime: number
   ): Promise<Entity> {
-    throw new Error("Method not implemented.");
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async readFile(key: string): Promise<ArrayBuffer> {
-    throw new Error("Method not implemented.");
+  readFile(_key: string): Promise<ArrayBuffer> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async rename(key1: string, key2: string): Promise<void> {
-    throw new Error("Method not implemented.");
+  rename(_key1: string, _key2: string): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async rm(key: string): Promise<void> {
-    throw new Error("Method not implemented.");
+  rm(_key: string): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
-    return await this.checkConnectCommonOps(callbackFunc);
+  checkConnect(callbackFunc?: ErrorCallback): Promise<boolean> {
+    return this.checkConnectCommonOps(callbackFunc);
   }
 
-  async getUserDisplayName(): Promise<string> {
-    throw new Error("Method not implemented.");
+  getUserDisplayName(): Promise<string> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
-  async revokeAuth(): Promise<any> {
-    throw new Error("Method not implemented.");
+  revokeAuth(): Promise<void> {
+    return Promise.reject(new Error("Method not implemented."));
   }
 
   allowEmptyFile(): boolean {

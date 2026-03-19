@@ -1,10 +1,10 @@
 import PQueue from "p-queue";
 import XRegExp from "xregexp";
 import type {
+  AxiomSyncPluginSettings,
   ConflictActionType,
   Entity,
   MixedEntity,
-  AxiomSyncPluginSettings,
   SUPPORTED_SERVICES_TYPE,
   SyncDirectionType,
   SyncTriggerSourceType,
@@ -19,6 +19,7 @@ import {
   insertSyncPlanRecordByVault,
   upsertPrevSyncRecordByVaultAndProfile,
 } from "../../src/localdb";
+import { logDebug, logInfo } from "../../src/log";
 import {
   DEFAULT_FILE_NAME_FOR_METADATAONREMOTE,
   DEFAULT_FILE_NAME_FOR_METADATAONREMOTE2,
@@ -32,7 +33,6 @@ import {
   roughSizeOfObject,
   unixTimeToStr,
 } from "../../src/misc";
-import { logDebug, logInfo } from "../../src/log";
 import type { Profiler } from "../../src/profiler";
 import { checkProRunnableAndFixInplace } from "./account";
 import { isMergable, mergeFile, tryDuplicateFile } from "./conflictLogic";
@@ -1722,12 +1722,22 @@ export const doActualSync = async (
   profileID: string,
   concurrency: number,
   protectModifyPercentage: number,
-  getProtectModifyPercentageErrorStrFunc: any,
+  getProtectModifyPercentageErrorStrFunc: (
+    protectModifyPercentage: number,
+    realModifyDeleteCount: number,
+    allFilesCount: number
+  ) => string,
   db: InternalDBs,
   profiler: Profiler | undefined,
   conflictAction: ConflictActionType,
   triggerSource: SyncTriggerSourceType,
-  callbackSyncProcess?: any
+  callbackSyncProcess?: (
+    s: SyncTriggerSourceType,
+    realCounter: number,
+    realTotalCount: number,
+    pathName: string,
+    decision: string
+  ) => Promise<void> | void
 ) => {
   profiler?.addIndent();
   profiler?.insert("doActualSync: enter");
@@ -1827,6 +1837,9 @@ export const doActualSync = async (
       for (let k = 0; k < singleLevelOps.length; ++k) {
         const val = singleLevelOps[k];
         const key = val.key;
+        if (key === undefined) {
+          throw Error(`sync operation key is undefined: ${JSON.stringify(val)}`);
+        }
 
         const fn = async () => {
           // console.debug(
@@ -1838,7 +1851,7 @@ export const doActualSync = async (
             realCounter,
             realTotalCount,
             key,
-            val.decision
+            val.decision ?? "unknown"
           );
 
           if (val.change === undefined || val.change) {
@@ -1890,10 +1903,13 @@ export const doActualSync = async (
   profiler?.removeIndent();
 };
 
-const formatSyncError = (err: any) => {
+const formatSyncError = (err: unknown) => {
   if (err instanceof Error) {
+    const errorWithCause = err as Error & { cause?: unknown };
     const causeMsg =
-      (err as any)?.cause !== undefined ? `; cause=${String((err as any).cause)}` : "";
+      errorWithCause.cause !== undefined
+        ? `; cause=${String(errorWithCause.cause)}`
+        : "";
     const stackTop =
       typeof err.stack === "string"
         ? err.stack.split("\n").slice(0, 2).join(" | ")
@@ -1925,18 +1941,28 @@ export async function syncer(
   configDir: string,
   settings: AxiomSyncPluginSettings,
   pluginVersion: string,
-  configSaver: () => Promise<any>,
-  getProtectModifyPercentageErrorStrFunc: any,
+  configSaver: () => Promise<void>,
+  getProtectModifyPercentageErrorStrFunc: (
+    protectModifyPercentage: number,
+    realModifyDeleteCount: number,
+    allFilesCount: number
+  ) => string,
   markIsSyncingFunc: (isSyncing: boolean) => void,
-  notifyFunc?: (s: SyncTriggerSourceType, step: number) => Promise<any>,
-  errNotifyFunc?: (s: SyncTriggerSourceType, error: Error) => Promise<any>,
-  ribboonFunc?: (s: SyncTriggerSourceType, step: number) => Promise<any>,
+  notifyFunc?: (s: SyncTriggerSourceType, step: number) => Promise<void>,
+  errNotifyFunc?: (s: SyncTriggerSourceType, error: Error) => Promise<void>,
+  ribboonFunc?: (s: SyncTriggerSourceType, step: number) => Promise<void>,
   statusBarFunc?: (
     s: SyncTriggerSourceType,
     step: number,
     everythingOk: boolean
-  ) => any,
-  callbackSyncProcess?: any
+  ) => Promise<void> | void,
+  callbackSyncProcess?: (
+    s: SyncTriggerSourceType,
+    realCounter: number,
+    realTotalCount: number,
+    pathName: string,
+    decision: string
+  ) => Promise<void> | void
 ) {
   logInfo(`starting sync.`);
   markIsSyncingFunc(true);
@@ -2079,7 +2105,7 @@ export async function syncer(
         `finish step${step} (skip actual sync because of dry run)`
       );
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     profiler?.insert("start error branch");
     everythingOk = false;
     let normalizedError: Error;

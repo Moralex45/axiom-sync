@@ -15,7 +15,7 @@ export const configureLogging = (level?: string) => {
 
 export const logInfo = (...args: unknown[]) => {
   if (getConsoleLevel() === "debug") {
-    console.info(...args);
+    console.debug(...args);
   }
 };
 

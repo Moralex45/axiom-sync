@@ -6,14 +6,15 @@ import {
   OAUTH2_FORCE_EXPIRE_MILLISECONDS,
 } from "../../src/baseTypes";
 import { FakeFs } from "../../src/fsAll";
-import { getFolderLevels } from "../../src/misc";
+import { httpRequest } from "../../src/http";
+import { logDebug, logInfo } from "../../src/log";
+import { delay, getFolderLevels } from "../../src/misc";
 import {
   COMMAND_CALLBACK_PCLOUD,
   PCLOUD_CLIENT_ID,
   PCLOUD_CLIENT_SECRET,
   type PCloudConfig,
 } from "./baseTypesPro";
-import { logDebug, logInfo } from "../../src/log";
 
 export const DEFAULT_PCLOUD_CONFIG: PCloudConfig = {
   accessToken: "",
@@ -61,7 +62,7 @@ interface AuthResSucc {
 export const sendAuthReq = async (
   hostname: string,
   authCode: string,
-  errorCallBack: any
+  errorCallBack?: (error: unknown) => Promise<void> | void
 ) => {
   const clientID = PCLOUD_CLIENT_ID ?? "";
   const clientSecret = PCLOUD_CLIENT_SECRET ?? "";
@@ -72,11 +73,12 @@ export const sendAuthReq = async (
       client_secret: clientSecret,
     };
     // console.debug(k);
-    const resp1 = await fetch(`https://${hostname}/oauth2_token`, {
+    const resp1 = await httpRequest(`https://${hostname}/oauth2_token`, {
       method: "POST",
-      body: new URLSearchParams(k),
+      body: new URLSearchParams(k).toString(),
+      contentType: "application/x-www-form-urlencoded",
     });
-    const resp2: AuthResSucc = await resp1.json();
+    const resp2 = await resp1.json<AuthResSucc>();
     // console.debug(resp2);
     if (resp2?.result !== 0) {
       throw Error(`result is not 0 (success) in the end`);
@@ -97,7 +99,7 @@ export const setConfigBySuccessfullAuthInplace = async (
   config: PCloudConfig,
   authAllowFirstRes: AuthAllowFirstRes,
   authRes: AuthResSucc | undefined,
-  saveUpdatedConfigFunc: () => Promise<any> | undefined
+  saveUpdatedConfigFunc: (() => Promise<void>) | undefined
 ) => {
   if (authRes === undefined) {
     throw Error(
@@ -298,7 +300,7 @@ export class FakeFsPCloud extends FakeFs {
   pCloudConfig: PCloudConfig;
   remoteBaseDir: string;
   vaultFolderExists: boolean;
-  saveUpdatedConfigFunc: () => Promise<any>;
+  saveUpdatedConfigFunc: () => Promise<void>;
 
   keyToPCloudEntity: Record<string, PCloudEntity>;
   baseDirID: number;
@@ -308,7 +310,7 @@ export class FakeFsPCloud extends FakeFs {
   constructor(
     pCloudConfig: PCloudConfig,
     vaultName: string,
-    saveUpdatedConfigFunc: () => Promise<any>
+    saveUpdatedConfigFunc: () => Promise<void>
   ) {
     super();
     this.kind = "pcloud";
@@ -319,7 +321,11 @@ export class FakeFsPCloud extends FakeFs {
     this.keyToPCloudEntity = {};
     this.baseDirID = 0;
 
-    (global as any).locationid = pCloudConfig.locationid; // why?? pcloud, why??
+    Reflect.set(
+      globalThis as typeof globalThis & Record<string, unknown>,
+      "locationid",
+      pCloudConfig.locationid
+    ); // required by the upstream SDK
     this.client = pcloudSdk.createClient(pCloudConfig.accessToken);
   }
 
@@ -507,11 +513,11 @@ export class FakeFsPCloud extends FakeFs {
     const apiUrl = `https://${this.pCloudConfig.hostname}/uploadfile?${params}`;
 
     if (content.byteLength > 0) {
-      const rsp = await fetch(apiUrl, {
+      const rsp = await httpRequest(apiUrl, {
         method: "PUT",
         body: content,
       });
-      const f: StatRawResponse = await rsp.json();
+      const f = await rsp.json<StatRawResponse>();
       const entity = fromRawResponseToEntity(f.metadata[0], parentFolderPath);
       // console.debug(entity);
       this.keyToPCloudEntity[key] = entity;
@@ -521,20 +527,18 @@ export class FakeFsPCloud extends FakeFs {
       // it can be uploaded successfully but the call doesn't end
       // we abort it and stat it manually.
       // console.warn(`uploading empty file ${key}`);
-      const controller = new AbortController();
       const timeoutMs = 300; // just a random reasonable number
-      const id = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        await fetch(apiUrl, {
-          method: "PUT",
-          body: content,
-          signal: controller.signal,
-        });
+        await Promise.race([
+          httpRequest(apiUrl, {
+            method: "PUT",
+            body: content,
+          }),
+          delay(timeoutMs),
+        ]);
       } catch (e) {
         // console.warn(`we abort the request of uploading empty file ${key}:`);
         // console.warn(e);
-      } finally {
-        clearTimeout(id);
       }
 
       // raw stat here
@@ -544,8 +548,10 @@ export class FakeFsPCloud extends FakeFs {
         path: getPCloudPath(key, this.remoteBaseDir),
       });
       const apiUrlStat = `https://${this.pCloudConfig.hostname}/stat?${params}`;
-      const rsp2 = await fetch(apiUrlStat);
-      const f = await rsp2.json();
+      const rsp2 = await httpRequest(apiUrlStat, { method: "GET" });
+      const f = await rsp2.json<{
+        metadata: Folder | File;
+      }>();
       const entity = fromRawResponseToEntity(f.metadata, parentFolderPath);
       // console.warn(entity);
       this.keyToPCloudEntity[key] = entity;
@@ -599,7 +605,9 @@ export class FakeFsPCloud extends FakeFs {
     }
   }
 
-  async checkConnect(callbackFunc?: any): Promise<boolean> {
+  async checkConnect(
+    callbackFunc?: (error: unknown) => void
+  ): Promise<boolean> {
     // if we can init, we can connect
     try {
       await this._init();
@@ -616,7 +624,7 @@ export class FakeFsPCloud extends FakeFs {
     throw new Error("Method not implemented.");
   }
 
-  async revokeAuth(): Promise<any> {
+  async revokeAuth(): Promise<void> {
     await this._init();
     throw new Error("Method not implemented.");
   }
